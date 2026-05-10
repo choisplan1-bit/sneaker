@@ -155,6 +155,7 @@ button.sell-btn:hover{background:var(--acc);color:#000}
   <button class="nb" onclick="goTab('sale')">💰 판매등록</button>
   <button class="nb" onclick="goTab('ship')">🚚 발송관리</button>
   <button class="nb" onclick="goTab('ana')">📊 수익분석</button>
+  <button class="nb" onclick="goTab('cfg')">⚙️ 설정</button>
 </nav>
 
 <!-- 재고관리 -->
@@ -264,6 +265,61 @@ button.sell-btn:hover{background:var(--acc);color:#000}
 
 <!-- 수익분석 -->
 <div id="p-ana" class="pane"><div id="ana-content"></div></div>
+
+<!-- 설정 -->
+<div id="p-cfg" class="pane">
+  <div class="sh"><span class="sh-title">⚙️ 설정</span></div>
+
+  <!-- 채널별 기본 택배비 -->
+  <div class="card">
+    <div class="card-title">📦 채널별 기본 택배비</div>
+    <p style="font-size:12px;color:var(--tx2);margin-bottom:14px">판매 등록 시 채널 선택하면 자동으로 입력되는 기본값입니다.</p>
+    <div class="fgrid">
+      <div class="fgrp">
+        <label class="flbl">크림 기본 택배비 (원)</label>
+        <input type="number" id="cfg-kream-fee" placeholder="2500">
+      </div>
+      <div class="fgrp">
+        <label class="flbl">포이즌 기본 택배비 (원)</label>
+        <input type="number" id="cfg-poison-fee" placeholder="0">
+      </div>
+      <div class="fgrp">
+        <label class="flbl">당근 택배거래 기본 택배비 (원)</label>
+        <input type="number" id="cfg-daangn-fee" placeholder="0">
+      </div>
+    </div>
+    <div class="mt12"><button class="pr" onclick="saveCfg()">저장</button></div>
+  </div>
+
+  <!-- 판매 내역 수정 -->
+  <div class="card">
+    <div class="card-title">✏️ 판매 내역 수정</div>
+    <p style="font-size:12px;color:var(--tx2);margin-bottom:14px">수정할 항목을 검색해서 직접 편집하세요.</p>
+    <div class="frow mb12">
+      <input id="eq" placeholder="🔍 제품명 검색" oninput="renderEditSales()">
+      <select id="ecf" onchange="renderEditSales()" style="max-width:120px">
+        <option value="">전체 채널</option><option value="daangn">당근</option><option value="poison">포이즌</option><option value="kream">크림</option>
+      </select>
+    </div>
+    <div class="tw"><table>
+      <thead><tr><th>판매일</th><th>제품명</th><th>사이즈</th><th>매입가</th><th>판매가</th><th>택배비</th><th>채널</th><th>수정</th></tr></thead>
+      <tbody id="ebody"></tbody>
+    </table></div>
+  </div>
+
+  <!-- 재고 수정 -->
+  <div class="card">
+    <div class="card-title">✏️ 재고 수정</div>
+    <p style="font-size:12px;color:var(--tx2);margin-bottom:14px">재고 항목의 매입가·비고를 직접 수정할 수 있습니다.</p>
+    <div class="frow mb12">
+      <input id="eiq" placeholder="🔍 제품명 검색" oninput="renderEditInv()">
+    </div>
+    <div class="tw"><table>
+      <thead><tr><th>매입일</th><th>제품명</th><th>색상</th><th>사이즈</th><th>매입가</th><th>비고</th><th>수정</th></tr></thead>
+      <tbody id="eibody"></tbody>
+    </table></div>
+  </div>
+</div>
 </div>
 
 <!-- Modal 재고 추가 -->
@@ -279,6 +335,57 @@ button.sell-btn:hover{background:var(--acc);color:#000}
       <div class="fgrp span2"><label class="flbl">비고</label><input type="text" id="ino_" placeholder="박스없음, 환불불가 등"></div>
     </div>
     <div class="modal-footer"><button onclick="closeModal('addInv')">취소</button><button class="pr" onclick="addItem()">추가</button></div>
+  </div>
+</div>
+
+<!-- Modal 판매 수정 -->
+<div class="modal-bg" id="modal-editSale">
+  <div class="modal">
+    <h3>판매 내역 수정</h3>
+    <input type="hidden" id="es-id">
+    <div class="fgrid">
+      <div class="fgrp"><label class="flbl">판매일</label><input type="date" id="es-date"></div>
+      <div class="fgrp"><label class="flbl">제품명</label><input type="text" id="es-name"></div>
+      <div class="fgrp"><label class="flbl">색상</label><input type="text" id="es-color"></div>
+      <div class="fgrp"><label class="flbl">사이즈</label><input type="text" id="es-size"></div>
+      <div class="fgrp"><label class="flbl">매입가 (원)</label><input type="number" id="es-pp"></div>
+      <div class="fgrp"><label class="flbl">판매가 (원)</label><input type="number" id="es-sp"></div>
+      <div class="fgrp"><label class="flbl">택배비 (원)</label><input type="number" id="es-fee"></div>
+      <div class="fgrp"><label class="flbl">채널</label>
+        <select id="es-ch">
+          <option value="daangn">당근마켓</option>
+          <option value="poison">포이즌</option>
+          <option value="kream">크림</option>
+        </select>
+      </div>
+      <div class="fgrp"><label class="flbl">당근 유형</label>
+        <select id="es-dt">
+          <option value="delivery">택배거래</option>
+          <option value="direct">직거래</option>
+          <option value="instant">바로구매</option>
+          <option value="">해당없음</option>
+        </select>
+      </div>
+      <div class="fgrp span2"><label class="flbl">메모</label><input type="text" id="es-note"></div>
+    </div>
+    <div class="modal-footer"><button onclick="closeModal('editSale')">취소</button><button class="pr" onclick="saveEditSale()">저장</button></div>
+  </div>
+</div>
+
+<!-- Modal 재고 수정 -->
+<div class="modal-bg" id="modal-editInv">
+  <div class="modal">
+    <h3>재고 수정</h3>
+    <input type="hidden" id="ei-id">
+    <div class="fgrid">
+      <div class="fgrp"><label class="flbl">매입일</label><input type="date" id="ei-date"></div>
+      <div class="fgrp"><label class="flbl">제품명</label><input type="text" id="ei-name"></div>
+      <div class="fgrp"><label class="flbl">색상</label><input type="text" id="ei-color"></div>
+      <div class="fgrp"><label class="flbl">사이즈</label><input type="text" id="ei-size"></div>
+      <div class="fgrp"><label class="flbl">매입가 (원)</label><input type="number" id="ei-pp"></div>
+      <div class="fgrp span2"><label class="flbl">비고</label><input type="text" id="ei-note" placeholder="박스없음, 환불불가 등"></div>
+    </div>
+    <div class="modal-footer"><button onclick="closeModal('editInv')">취소</button><button class="pr" onclick="saveEditInv()">저장</button></div>
   </div>
 </div>
 
@@ -426,7 +533,7 @@ const INIT_SALES=[
   {n:'max plus',c:'',s:'270',p:120000,sd:'2026-03-13',sp:136000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'max plus',c:'',s:'290',p:120000,sd:'2026-03-13',sp:135000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'shox R4',c:'',s:'230',p:35200,sd:'2026-03-12',sp:52000,ch:'poison',dt:null,step:5,fee:0},
-  {n:'shox R4',c:'',s:'235',p:35200,sd:'2026-04-06',sp:59000,ch:'kream',dt:null,step:5,fee:2500},
+  {n:'shox R4',c:'',s:'235',p:35200,sd:'2026-04-06',sp:59000,ch:'kream',dt:null,step:5,fee:0},
   {n:'shox R4',c:'',s:'235',p:35200,sd:'2026-03-12',sp:43000,ch:'poison',dt:null,step:5,fee:0},
   {n:'shox R4',c:'',s:'240',p:35200,sd:'2026-03-12',sp:66000,ch:'poison',dt:null,step:5,fee:0},
   {n:'shox R4',c:'',s:'240',p:35200,sd:'2026-03-12',sp:52000,ch:'poison',dt:null,step:5,fee:0},
@@ -435,7 +542,7 @@ const INIT_SALES=[
   {n:'나이키 베나시',c:'',s:'240',p:14600,sd:'2026-04-15',sp:27000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'LD-1000',c:'노파',s:'235',p:29000,sd:'2026-03-17',sp:34000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'max95',c:'',s:'230',p:180000,sd:'2026-03-17',sp:200000,ch:'daangn',dt:'delivery',step:3,fee:0},
-  {n:'max95 핑크',c:'',s:'270',p:176000,sd:'2026-05-08',sp:191200,ch:'kream',dt:null,step:5,fee:2500},
+  {n:'max95 핑크',c:'',s:'270',p:176000,sd:'2026-05-08',sp:191200,ch:'kream',dt:null,step:5,fee:0},
   {n:'코르테즈 흰빨',c:'박스없음',s:'230',p:35700,sd:'2026-03-19',sp:45000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'코르테즈 흰빨',c:'박스없음',s:'240',p:35700,sd:'2026-03-27',sp:45000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'코르테즈 흰빨',c:'박스없음',s:'240',p:35700,sd:'2026-03-19',sp:47000,ch:'daangn',dt:'delivery',step:3,fee:0},
@@ -455,26 +562,26 @@ const INIT_SALES=[
   {n:'LD-1000',c:'초핑',s:'230',p:29000,sd:'2026-03-20',sp:43000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'LD-1000',c:'초핑',s:'235',p:29000,sd:'2026-03-20',sp:39000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'LD-1000',c:'초핑',s:'235',p:29000,sd:'2026-04-02',sp:39000,ch:'daangn',dt:'delivery',step:3,fee:0},
-  {n:'LD-1000',c:'초핑',s:'240',p:29000,sd:'2026-03-29',sp:46000,ch:'kream',dt:null,step:5,fee:2500},
+  {n:'LD-1000',c:'초핑',s:'240',p:29000,sd:'2026-03-29',sp:46000,ch:'kream',dt:null,step:5,fee:0},
   {n:'LD-1000',c:'초핑',s:'240',p:29000,sd:'2026-03-20',sp:42000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'LD-1000',c:'초핑',s:'255',p:29000,sd:'2026-04-06',sp:40000,ch:'daangn',dt:'delivery',step:3,fee:0},
-  {n:'LD-1000',c:'초핑',s:'260',p:29000,sd:'2026-04-09',sp:51000,ch:'kream',dt:null,step:5,fee:2500},
+  {n:'LD-1000',c:'초핑',s:'260',p:29000,sd:'2026-04-09',sp:51000,ch:'kream',dt:null,step:5,fee:0},
   {n:'max plus',c:'',s:'270',p:114900,sd:'2026-03-20',sp:128000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'max plus',c:'',s:'270',p:114900,sd:'2026-03-20',sp:128000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'max plus',c:'',s:'270',p:114900,sd:'2026-03-20',sp:128000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'max plus',c:'',s:'270',p:114900,sd:'2026-03-20',sp:128000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'max plus',c:'',s:'270',p:114900,sd:'2026-03-20',sp:128000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'max plus',c:'',s:'270',p:114900,sd:'2026-03-20',sp:128000,ch:'daangn',dt:'delivery',step:3,fee:0},
-  {n:'아디다스 삼바제인',c:'',s:'245',p:72000,sd:'2026-03-25',sp:89000,ch:'kream',dt:null,step:5,fee:2500},
+  {n:'아디다스 삼바제인',c:'',s:'245',p:72000,sd:'2026-03-25',sp:89000,ch:'kream',dt:null,step:5,fee:0},
   {n:'나이키 리프트2',c:'',s:'190',p:20700,sd:'2026-03-26',sp:29000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'나이키 리프트2',c:'',s:'200',p:20700,sd:'2026-04-26',sp:35000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'나이키 리프트2',c:'',s:'190',p:20700,sd:'2026-04-04',sp:29000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'나이키 리프트4',c:'',s:'200',p:20700,sd:'2026-03-26',sp:30000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'아쿠아스우쉬',c:'',s:'230',p:13600,sd:'2026-03-26',sp:30000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'조던 스캇',c:'남색',s:'S(95)',p:28100,sd:'2026-03-26',sp:36780,ch:'daangn',dt:'delivery',step:3,fee:0},
-  {n:'조던 스캇',c:'남색',s:'S(95)',p:28100,sd:'2026-03-26',sp:38500,ch:'kream',dt:null,step:5,fee:2500},
-  {n:'조던 스캇',c:'흰색',s:'L(105)',p:16800,sd:'2026-03-26',sp:26500,ch:'kream',dt:null,step:5,fee:2500},
-  {n:'조던 스캇',c:'흰색',s:'M(100)',p:16800,sd:'2026-04-18',sp:27500,ch:'kream',dt:null,step:5,fee:2500},
+  {n:'조던 스캇',c:'남색',s:'S(95)',p:28100,sd:'2026-03-26',sp:38500,ch:'kream',dt:null,step:5,fee:0},
+  {n:'조던 스캇',c:'흰색',s:'L(105)',p:16800,sd:'2026-03-26',sp:26500,ch:'kream',dt:null,step:5,fee:0},
+  {n:'조던 스캇',c:'흰색',s:'M(100)',p:16800,sd:'2026-04-18',sp:27500,ch:'kream',dt:null,step:5,fee:0},
   {n:'조던 스캇',c:'흰색',s:'M(100)',p:16800,sd:'2026-03-26',sp:27000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'코르테즈 흰빨',c:'',s:'230',p:33300,sd:'2026-03-26',sp:45000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'코르테즈 흰빨',c:'',s:'235',p:33300,sd:'2026-04-04',sp:45000,ch:'daangn',dt:'delivery',step:3,fee:0},
@@ -491,14 +598,14 @@ const INIT_SALES=[
   {n:'에어맥스 누엑시스',c:'wh',s:'240',p:22800,sd:'2026-04-04',sp:40000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'포스로우',c:'wh',s:'235',p:66700,sd:'2026-04-06',sp:77000,ch:'poison',dt:null,step:5,fee:0},
   {n:'삼바 제인',c:'',s:'255',p:76000,sd:'2026-04-07',sp:96500,ch:'daangn',dt:'delivery',step:3,fee:0},
-  {n:'삼바 제인',c:'',s:'255',p:76000,sd:'2026-04-07',sp:96500,ch:'kream',dt:null,step:5,fee:2500},
+  {n:'삼바 제인',c:'',s:'255',p:76000,sd:'2026-04-07',sp:96500,ch:'kream',dt:null,step:5,fee:0},
   {n:'업템포 슬라이드',c:'',s:'290',p:61000,sd:'2026-04-10',sp:78700,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'코르테즈 흰빨',c:'',s:'240',p:38000,sd:'2026-04-10',sp:48000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'코르테즈 흰빨',c:'',s:'240',p:38000,sd:'2026-04-17',sp:47000,ch:'daangn',dt:'delivery',step:3,fee:0},
-  {n:'LD-1000',c:'파주',s:'240',p:30900,sd:'2026-04-30',sp:36500,ch:'kream',dt:null,step:5,fee:2500},
+  {n:'LD-1000',c:'파주',s:'240',p:30900,sd:'2026-04-30',sp:36500,ch:'kream',dt:null,step:5,fee:0},
   {n:'P-6000',c:'',s:'240',p:55600,sd:'2026-04-10',sp:65000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'코르테즈 흰빨',c:'',s:'240',p:35700,sd:'2026-05-08',sp:44000,ch:'daangn',dt:'delivery',step:3,fee:0},
-  {n:'LD-1000',c:'검흰',s:'245',p:29000,sd:'2026-05-08',sp:38800,ch:'kream',dt:null,step:5,fee:2500},
+  {n:'LD-1000',c:'검흰',s:'245',p:29000,sd:'2026-05-08',sp:38800,ch:'kream',dt:null,step:5,fee:0},
   {n:'누엑시스',c:'검흰',s:'235',p:24500,sd:'2026-05-06',sp:37000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'누엑시스',c:'검흰',s:'250',p:24500,sd:'2026-05-05',sp:39000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'누엑시스',c:'검흰',s:'240',p:24500,sd:'2026-04-30',sp:38000,ch:'daangn',dt:'delivery',step:3,fee:0},
@@ -506,24 +613,24 @@ const INIT_SALES=[
   {n:'누엑시스',c:'검흰',s:'245',p:24500,sd:'2026-04-25',sp:38000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'샥스 TL',c:'검파',s:'285',p:62700,sd:'2026-05-05',sp:79000,ch:'poison',dt:null,step:3,fee:0},
   {n:'샥스 TL',c:'검파',s:'275',p:62700,sd:'2026-04-23',sp:77000,ch:'poison',dt:null,step:5,fee:0},
-  {n:'샥스 TL',c:'검파',s:'295',p:62700,sd:'2026-04-23',sp:79000,ch:'kream',dt:null,step:5,fee:2500},
+  {n:'샥스 TL',c:'검파',s:'295',p:62700,sd:'2026-04-23',sp:79000,ch:'kream',dt:null,step:5,fee:0},
   {n:'샥스 TL',c:'검파',s:'270',p:62700,sd:'2026-04-23',sp:79000,ch:'daangn',dt:'delivery',step:3,fee:0},
-  {n:'아바로버',c:'',s:'290',p:63300,sd:'2026-05-06',sp:76000,ch:'kream',dt:null,step:5,fee:2500},
+  {n:'아바로버',c:'',s:'290',p:63300,sd:'2026-05-06',sp:76000,ch:'kream',dt:null,step:5,fee:0},
   {n:'코르테즈 흰빨',c:'',s:'240',p:35700,sd:'2026-04-23',sp:47000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'코르테즈 흰빨',c:'',s:'240',p:35700,sd:'2026-04-23',sp:47000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'코르테즈 흰빨',c:'',s:'245',p:35700,sd:'2026-04-29',sp:46000,ch:'daangn',dt:'delivery',step:3,fee:0},
-  {n:'필드 제너럴 래프',c:'',s:'250',p:29000,sd:'2026-05-02',sp:40600,ch:'kream',dt:null,step:5,fee:2500},
+  {n:'필드 제너럴 래프',c:'',s:'250',p:29000,sd:'2026-05-02',sp:40600,ch:'kream',dt:null,step:5,fee:0},
   {n:'필드 제너럴 래프',c:'',s:'270',p:29000,sd:'2026-04-23',sp:38000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'필드 제너럴 래프',c:'',s:'270',p:29000,sd:'2026-04-30',sp:38000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'필드 제너럴 래프',c:'',s:'270',p:29000,sd:'2026-04-29',sp:38000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'필드 제너럴 래프',c:'',s:'275',p:29000,sd:'2026-04-28',sp:38000,ch:'daangn',dt:'delivery',step:3,fee:0},
-  {n:'LD-1000',c:'검흰',s:'255',p:29000,sd:'2026-05-07',sp:41500,ch:'kream',dt:null,step:5,fee:2500},
+  {n:'LD-1000',c:'검흰',s:'255',p:29000,sd:'2026-05-07',sp:41500,ch:'kream',dt:null,step:5,fee:0},
   {n:'LD-1000',c:'검흰',s:'240',p:29000,sd:'2026-05-05',sp:35000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'LD-1000',c:'검흰',s:'235',p:29000,sd:'2026-04-23',sp:38000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'LD-1000',c:'검흰',s:'245',p:29000,sd:'2026-04-29',sp:38000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'LD-1000',c:'흰은',s:'235',p:29000,sd:'2026-05-01',sp:39000,ch:'daangn',dt:'delivery',step:3,fee:0},
-  {n:'LD-1000',c:'흰은',s:'235',p:29000,sd:'2026-04-26',sp:36700,ch:'kream',dt:null,step:5,fee:2500},
-  {n:'LD-1000',c:'흰은',s:'240',p:29000,sd:'2026-04-26',sp:36700,ch:'kream',dt:null,step:5,fee:2500},
+  {n:'LD-1000',c:'흰은',s:'235',p:29000,sd:'2026-04-26',sp:36700,ch:'kream',dt:null,step:5,fee:0},
+  {n:'LD-1000',c:'흰은',s:'240',p:29000,sd:'2026-04-26',sp:36700,ch:'kream',dt:null,step:5,fee:0},
   {n:'95 보라',c:'',s:'245',p:111600,sd:'2026-05-02',sp:130000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'95 올검 에나멜',c:'',s:'255',p:116475,sd:'2026-05-06',sp:130000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'95 올검 에나멜',c:'',s:'260',p:116475,sd:'2026-04-28',sp:134000,ch:'poison',dt:null,step:5,fee:0},
@@ -533,12 +640,12 @@ const INIT_SALES=[
   {n:'LD-1000',c:'검흰',s:'270',p:36100,sd:'2026-05-06',sp:46000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'LD-1000 데님',c:'',s:'240',p:29100,sd:'2026-05-02',sp:42000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'르브론',c:'',s:'275',p:45100,sd:'2026-05-09',sp:55000,ch:'daangn',dt:'delivery',step:3,fee:0},
-  {n:'줌 베이퍼 16프로 볼트',c:'',s:'280',p:55600,sd:'2026-05-09',sp:63000,ch:'kream',dt:null,step:5,fee:2500},
+  {n:'줌 베이퍼 16프로 볼트',c:'',s:'280',p:55600,sd:'2026-05-09',sp:63000,ch:'kream',dt:null,step:5,fee:0},
   {n:'줌 베이퍼 16프로 볼트',c:'',s:'280',p:55600,sd:'2026-05-04',sp:70000,ch:'daangn',dt:'delivery',step:3,fee:0},
-  {n:'줌 베이퍼 16프로 볼트',c:'',s:'270',p:55600,sd:'2026-05-01',sp:73000,ch:'kream',dt:null,step:5,fee:2500},
-  {n:'줌 베이퍼 16프로 볼트',c:'',s:'270',p:55600,sd:'2026-05-01',sp:74000,ch:'kream',dt:null,step:5,fee:2500},
+  {n:'줌 베이퍼 16프로 볼트',c:'',s:'270',p:55600,sd:'2026-05-01',sp:73000,ch:'kream',dt:null,step:5,fee:0},
+  {n:'줌 베이퍼 16프로 볼트',c:'',s:'270',p:55600,sd:'2026-05-01',sp:74000,ch:'kream',dt:null,step:5,fee:0},
   {n:'퍼시픽 핑크',c:'',s:'240',p:34600,sd:'2026-05-01',sp:38000,ch:'daangn',dt:'delivery',step:3,fee:0},
-  {n:'sl 72 화이트',c:'',s:'240',p:70000,sd:'2026-05-07',sp:79000,ch:'kream',dt:null,step:5,fee:2500},
+  {n:'sl 72 화이트',c:'',s:'240',p:70000,sd:'2026-05-07',sp:79000,ch:'kream',dt:null,step:5,fee:0},
   {n:'아쿠아스우쉬',c:'',s:'210',p:13600,sd:'2026-05-09',sp:25000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'코르테즈 연청',c:'',s:'235',p:27300,sd:'2026-05-10',sp:37000,ch:'daangn',dt:'delivery',step:3,fee:0},
   {n:'코르테즈 흰색',c:'',s:'240',p:27300,sd:'2026-05-10',sp:35000,ch:'daangn',dt:'delivery',step:3,fee:0},
@@ -552,11 +659,10 @@ const INIT_SALES=[
 let uid=0;
 const gid=()=>'u'+(uid++).toString(36)+Date.now().toString(36).slice(-4);
 const LS_KEY='sneaker_v3';
-let S={inventory:[],sales:[],updatedAt:null};
+let S={inventory:[],sales:[],updatedAt:null,cfg:{kreamFee:2500,poisonFee:0,daangnFee:0}};
 let fbMode=false;
 let pchart=null,cchart=null;
 let curTab='inv';
-const TABS=['inv','sale','ship','ana'];
 
 function mkInitData(){
   return{
@@ -565,6 +671,7 @@ function mkInitData(){
       const sk=r.ch==='daangn'?'daangn_'+(r.dt||'delivery'):r.ch;
       return{id:'ss'+i,inventoryId:null,productName:r.n,color:r.c,size:r.s,purchasePrice:r.p,saleDate:r.sd,salePrice:r.sp,channel:r.ch,daangnType:r.dt,shippingStep:Math.min(r.step,STEPS[sk].length-1),shippingFee:r.fee||0,notes:''};
     }),
+    cfg:{kreamFee:2500,poisonFee:0,daangnFee:0},
     updatedAt:new Date().toISOString()
   };
 }
@@ -593,6 +700,8 @@ window.addEventListener('fb-ready',()=>{
 });
 setTimeout(()=>{if(!S.inventory.length){const local=lsLoad();if(local){S=local;}else{S=mkInitData();lsSave();}render();}},2000);
 
+const TABS=['inv','sale','ship','ana','cfg'];
+
 function goTab(t){
   document.querySelectorAll('.pane').forEach(p=>p.classList.remove('act'));
   document.querySelectorAll('.nb').forEach(b=>b.classList.remove('act'));
@@ -602,6 +711,7 @@ function goTab(t){
   if(t==='sale'){fillSel();renderSales();}
   if(t==='ship')renderShip();
   if(t==='ana')renderAna();
+  if(t==='cfg')renderCfg();
 }
 function openModal(id){document.getElementById('modal-'+id).classList.add('show');}
 function closeModal(id){document.getElementById('modal-'+id).classList.remove('show');}
@@ -697,24 +807,154 @@ function calcProfit(){
 
 function onCC(){
   const ch=v('sch');
+  const cfg=S.cfg||{kreamFee:2500,poisonFee:0,daangnFee:0};
   document.getElementById('dtf').classList.toggle('hidden',ch!=='daangn');
   document.getElementById('poison-box').classList.toggle('hidden',ch!=='poison');
   const hint=document.getElementById('kream-hint');
   if(ch==='kream'){
-    document.getElementById('sfee').value='2500';
-    hint.textContent='크림 기본 택배비 2,500원 자동 설정됨';
+    document.getElementById('sfee').value=cfg.kreamFee||0;
+    hint.textContent=`크림 기본 택배비 ${(cfg.kreamFee||0).toLocaleString()}원 자동 설정됨`;
     hint.style.display='block';
+  }else if(ch==='poison'){
+    document.getElementById('sfee').value=cfg.poisonFee||0;
+    hint.style.display='none';
+  }else if(ch==='daangn'){
+    document.getElementById('sfee').value=cfg.daangnFee||0;
+    hint.style.display='none';
+    hint.textContent='';
+    document.getElementById('combined-chk').checked=false;
+    document.getElementById('combined-result').textContent='';
   }else{
-    if(ch!=='poison')document.getElementById('sfee').value='0';
+    document.getElementById('sfee').value='0';
     hint.style.display='none';
     hint.textContent='';
   }
-  // 포이즌이면 합배송 체크 초기화
   if(ch!=='poison'){
     document.getElementById('combined-chk').checked=false;
     document.getElementById('combined-result').textContent='';
   }
   calcProfit();
+}
+
+// ===== 설정 =====
+function renderCfg(){
+  const cfg=S.cfg||{kreamFee:2500,poisonFee:0,daangnFee:0};
+  document.getElementById('cfg-kream-fee').value=cfg.kreamFee??2500;
+  document.getElementById('cfg-poison-fee').value=cfg.poisonFee??0;
+  document.getElementById('cfg-daangn-fee').value=cfg.daangnFee??0;
+  renderEditSales();
+  renderEditInv();
+}
+
+function saveCfg(){
+  if(!S.cfg) S.cfg={};
+  S.cfg.kreamFee=+document.getElementById('cfg-kream-fee').value||0;
+  S.cfg.poisonFee=+document.getElementById('cfg-poison-fee').value||0;
+  S.cfg.daangnFee=+document.getElementById('cfg-daangn-fee').value||0;
+  saveState();
+  alert('✅ 설정이 저장됐습니다!');
+}
+
+// 판매 내역 수정
+function renderEditSales(){
+  const q=(document.getElementById('eq')?.value||'').toLowerCase();
+  const cf=document.getElementById('ecf')?.value||'';
+  let sl=S.sales.filter(s=>{
+    const nm=(s.productName+' '+s.color).toLowerCase();
+    return(!q||nm.includes(q))&&(!cf||s.channel===cf);
+  }).sort((a,b)=>b.saleDate.localeCompare(a.saleDate)).slice(0,50);
+  const body=document.getElementById('ebody');
+  if(!body) return;
+  if(!sl.length){body.innerHTML=`<tr><td colspan="8" class="empty">항목 없음</td></tr>`;return;}
+  body.innerHTML=sl.map(s=>`<tr>
+    <td style="color:var(--tx2)">${fd(s.saleDate)}</td>
+    <td><b>${s.productName}</b>${s.color?' '+s.color:''}</td>
+    <td>${s.size}</td>
+    <td style="color:var(--tx3)">${won(s.purchasePrice)}</td>
+    <td>${won(s.salePrice)}</td>
+    <td style="color:var(--red)">${s.shippingFee?'-'+s.shippingFee.toLocaleString()+'원':'-'}</td>
+    <td>${chBdg(s.channel,s.daangnType)}</td>
+    <td><button class="sm" onclick="openEditSale('${s.id}')">✏️ 수정</button></td>
+  </tr>`).join('');
+}
+
+function openEditSale(id){
+  const s=S.sales.find(x=>x.id===id);if(!s)return;
+  document.getElementById('es-id').value=id;
+  document.getElementById('es-date').value=s.saleDate||'';
+  document.getElementById('es-name').value=s.productName||'';
+  document.getElementById('es-color').value=s.color||'';
+  document.getElementById('es-size').value=s.size||'';
+  document.getElementById('es-pp').value=s.purchasePrice||0;
+  document.getElementById('es-sp').value=s.salePrice||0;
+  document.getElementById('es-fee').value=s.shippingFee||0;
+  document.getElementById('es-ch').value=s.channel||'daangn';
+  document.getElementById('es-dt').value=s.daangnType||'';
+  document.getElementById('es-note').value=s.notes||'';
+  openModal('editSale');
+}
+
+function saveEditSale(){
+  const id=document.getElementById('es-id').value;
+  const s=S.sales.find(x=>x.id===id);if(!s)return;
+  s.saleDate=document.getElementById('es-date').value;
+  s.productName=document.getElementById('es-name').value;
+  s.color=document.getElementById('es-color').value;
+  s.size=document.getElementById('es-size').value;
+  s.purchasePrice=+document.getElementById('es-pp').value||0;
+  s.salePrice=+document.getElementById('es-sp').value||0;
+  s.shippingFee=+document.getElementById('es-fee').value||0;
+  s.channel=document.getElementById('es-ch').value;
+  s.daangnType=document.getElementById('es-dt').value||null;
+  s.notes=document.getElementById('es-note').value;
+  saveState();closeModal('editSale');renderEditSales();renderSales();
+  alert('✅ 수정됐습니다!');
+}
+
+// 재고 수정
+function renderEditInv(){
+  const q=(document.getElementById('eiq')?.value||'').toLowerCase();
+  let items=S.inventory.filter(i=>{
+    const nm=(i.productName+' '+i.color).toLowerCase();
+    return !q||nm.includes(q);
+  }).sort((a,b)=>b.purchaseDate.localeCompare(a.purchaseDate)).slice(0,50);
+  const body=document.getElementById('eibody');
+  if(!body) return;
+  if(!items.length){body.innerHTML=`<tr><td colspan="7" class="empty">항목 없음</td></tr>`;return;}
+  body.innerHTML=items.map(i=>`<tr>
+    <td style="color:var(--tx2)">${fd(i.purchaseDate)}</td>
+    <td><b>${i.productName}</b></td>
+    <td>${i.color||'—'}</td>
+    <td>${i.size}</td>
+    <td>${won(i.purchasePrice)}</td>
+    <td style="font-size:11px;color:var(--tx2)">${i.notes||''}</td>
+    <td><button class="sm" onclick="openEditInv('${i.id}')">✏️ 수정</button></td>
+  </tr>`).join('');
+}
+
+function openEditInv(id){
+  const i=S.inventory.find(x=>x.id===id);if(!i)return;
+  document.getElementById('ei-id').value=id;
+  document.getElementById('ei-date').value=i.purchaseDate||'';
+  document.getElementById('ei-name').value=i.productName||'';
+  document.getElementById('ei-color').value=i.color||'';
+  document.getElementById('ei-size').value=i.size||'';
+  document.getElementById('ei-pp').value=i.purchasePrice||0;
+  document.getElementById('ei-note').value=i.notes||'';
+  openModal('editInv');
+}
+
+function saveEditInv(){
+  const id=document.getElementById('ei-id').value;
+  const i=S.inventory.find(x=>x.id===id);if(!i)return;
+  i.purchaseDate=document.getElementById('ei-date').value;
+  i.productName=document.getElementById('ei-name').value;
+  i.color=document.getElementById('ei-color').value;
+  i.size=document.getElementById('ei-size').value;
+  i.purchasePrice=+document.getElementById('ei-pp').value||0;
+  i.notes=document.getElementById('ei-note').value;
+  saveState();closeModal('editInv');renderEditInv();renderInv();fillSel();
+  alert('✅ 수정됐습니다!');
 }
 
 function onCombined(){
@@ -980,6 +1220,7 @@ function render(){
   if(curTab==='sale'){fillSel();renderSales();}
   if(curTab==='ship')renderShip();
   if(curTab==='ana')renderAna();
+  if(curTab==='cfg')renderCfg();
 }
 document.getElementById('sd').value=new Date().toISOString().slice(0,10);
 </script>
