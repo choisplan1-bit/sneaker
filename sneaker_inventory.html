@@ -783,19 +783,29 @@ window.addEventListener('fb-ready',()=>{
   if(window.__fbOK&&window.__fbListen){
     fbMode=true;
 
-    // 로컬 데이터 먼저 보여주기 (빠른 초기 로딩)
+    // 로컬 데이터 있으면 먼저 보여주기 (빠른 초기 로딩)
     const local=lsLoad();
     if(local){ S=local; render(); }
 
-    // Firebase 리스너 등록
-    window.__fbListen(onFirebaseData);
-
-    // 최초 실행 (로컬 데이터 없음) → 초기 데이터 Firebase에 올림
-    if(!local){
-      S=mkInitData();
-      lsSave();
-      window.__fbSave(S).then(()=>render());
-    }
+    // Firebase 리스너 등록 — Firebase 데이터가 오면 onFirebaseData에서 처리
+    // ★ 중요: 로컬이 없어도 절대 Firebase를 초기 데이터로 덮어쓰지 않음
+    //   Firebase에 이미 데이터가 있으면 리스너가 받아서 반영
+    //   Firebase에도 아무 데이터가 없을 때만(완전 최초) 초기 데이터 씀
+    window.__fbListen(data=>{
+      if(!data){
+        // Firebase가 완전히 비어있을 때만 초기 데이터 올림
+        if(!local){
+          S=mkInitData();
+          lsSave();
+          window.__fbSave(S).then(()=>render());
+        } else {
+          // 로컬은 있는데 Firebase가 비어있음 → 로컬을 Firebase에 올림
+          window.__fbSave(S).then(()=>render());
+        }
+      } else {
+        onFirebaseData(data);
+      }
+    });
 
     setStat('실시간 연결 중','on');
   }else{
@@ -805,14 +815,14 @@ window.addEventListener('fb-ready',()=>{
   }
 });
 
-// 2초 후에도 데이터 없으면 로컬에서 복구
+// 3초 후에도 데이터 없으면 로컬에서 복구 (Firebase 느릴 때 대비)
 setTimeout(()=>{
   if(!S.inventory.length){
     const local=lsLoad();
-    if(local){S=local;}else{S=mkInitData();lsSave();}
-    render();
+    if(local){S=local;render();}
+    // Firebase 없고 로컬도 없으면 → 아무것도 안 함 (Firebase 응답 기다림)
   }
-},2000);
+},3000);
 
 const TABS=['inv','sale','ship','ana','cfg'];
 
