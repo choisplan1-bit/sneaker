@@ -178,7 +178,7 @@ button.sell-btn:hover{background:var(--acc);color:#000}
     <span id="icnt" style="font-size:12px;color:var(--tx2);white-space:nowrap"></span>
   </div>
   <div class="tw"><table>
-    <thead><tr><th>매입일</th><th>제품명</th><th>색상</th><th>사이즈</th><th>매입가</th><th>상태</th><th>비고</th><th>판매</th><th></th></tr></thead>
+    <thead><tr><th>매입일</th><th>제품명</th><th>품번</th><th>색상</th><th>사이즈</th><th>매입가</th><th>상태</th><th>비고</th><th>판매</th><th></th></tr></thead>
     <tbody id="ibody"></tbody>
   </table></div>
 </div>
@@ -328,12 +328,27 @@ button.sell-btn:hover{background:var(--acc);color:#000}
     <h3>재고 추가</h3>
     <div class="fgrid">
       <div class="fgrp"><label class="flbl">매입 날짜 *</label><input type="date" id="id_"></div>
-      <div class="fgrp"><label class="flbl">제품명 *</label><input type="text" id="in_" placeholder="예: LD-1000"></div>
+      <div class="fgrp"><label class="flbl">수량 *</label><input type="number" id="iqty_" placeholder="1" min="1" value="1"></div>
+
+      <!-- 제품명 자동완성 -->
+      <div class="fgrp span2" style="position:relative">
+        <label class="flbl">제품명 * <span style="color:var(--tx3);font-weight:400">— 기존 제품 선택 또는 직접 입력</span></label>
+        <div style="display:flex;gap:6px">
+          <div style="position:relative;flex:1">
+            <input type="text" id="in_" placeholder="제품명 검색 또는 직접 입력" oninput="onProductInput()" onfocus="onProductInput()" autocomplete="off">
+            <div id="ac-list" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg3);border:1px solid var(--acc);border-top:none;border-radius:0 0 var(--rs) var(--rs);z-index:200;max-height:180px;overflow-y:auto"></div>
+          </div>
+          <button type="button" onclick="toggleProductDrop()" style="flex-shrink:0;padding:8px 10px" title="전체 제품 목록">▾</button>
+        </div>
+      </div>
+
+      <div class="fgrp"><label class="flbl">품번 (SKU)</label><input type="text" id="isku_" placeholder="예: DX1234-001"></div>
       <div class="fgrp"><label class="flbl">색상</label><input type="text" id="ic_" placeholder="예: 검흰"></div>
       <div class="fgrp"><label class="flbl">사이즈 *</label><input type="text" id="is_" placeholder="240"></div>
       <div class="fgrp"><label class="flbl">매입가 (원) *</label><input type="number" id="ip_" placeholder="0"></div>
       <div class="fgrp span2"><label class="flbl">비고</label><input type="text" id="ino_" placeholder="박스없음, 환불불가 등"></div>
     </div>
+    <div id="add-preview" style="display:none;background:var(--bg3);border-radius:var(--rs);padding:10px 12px;margin-top:10px;font-size:12px;color:var(--tx2)"></div>
     <div class="modal-footer"><button onclick="closeModal('addInv')">취소</button><button class="pr" onclick="addItem()">추가</button></div>
   </div>
 </div>
@@ -380,6 +395,7 @@ button.sell-btn:hover{background:var(--acc);color:#000}
     <div class="fgrid">
       <div class="fgrp"><label class="flbl">매입일</label><input type="date" id="ei-date"></div>
       <div class="fgrp"><label class="flbl">제품명</label><input type="text" id="ei-name"></div>
+      <div class="fgrp"><label class="flbl">품번 (SKU)</label><input type="text" id="ei-sku" placeholder="예: DX1234-001"></div>
       <div class="fgrp"><label class="flbl">색상</label><input type="text" id="ei-color"></div>
       <div class="fgrp"><label class="flbl">사이즈</label><input type="text" id="ei-size"></div>
       <div class="fgrp"><label class="flbl">매입가 (원)</label><input type="number" id="ei-pp"></div>
@@ -852,6 +868,7 @@ function renderInv(){
     return`<tr>
       <td style="color:var(--tx2)">${fd(i.purchaseDate)}</td>
       <td><b>${i.productName}</b></td>
+      <td style="color:var(--tx3);font-size:11px">${i.sku||'—'}</td>
       <td>${i.color||'—'}</td><td>${i.size}</td>
       <td>${won(i.purchasePrice)}</td>
       <td><span class="bdg ${i.status==='in_stock'?'bdg-stock':'bdg-sold'}">${i.status==='in_stock'?'재고중':'판매완료'}</span></td>
@@ -863,12 +880,92 @@ function renderInv(){
 }
 
 function addItem(){
-  const d=v('id_'),n=v('in_'),c=v('ic_'),s=v('is_'),p=+v('ip_');
+  const d=v('id_'),n=v('in_').trim(),c=v('ic_'),s=v('is_'),p=+v('ip_');
+  const qty=Math.max(1,parseInt(v('iqty_'))||1);
+  const sku=v('isku_').trim();
   if(!d||!n||!s||!p){alert('날짜, 제품명, 사이즈, 매입가는 필수입니다');return;}
-  S.inventory.unshift({id:gid(),purchaseDate:d,productName:n,color:c,size:s,purchasePrice:p,status:'in_stock',notes:v('ino_')});
+  for(let i=0;i<qty;i++){
+    S.inventory.unshift({id:gid(),purchaseDate:d,productName:n,color:c,size:s,purchasePrice:p,status:'in_stock',sku:sku,notes:v('ino_')});
+  }
   window.__safeSave();renderInv();fillSel();closeModal('addInv');
-  ['id_','in_','ic_','is_','ip_','ino_'].forEach(x=>{const el=document.getElementById(x);if(el)el.value='';});
+  ['id_','in_','ic_','is_','ip_','ino_','isku_'].forEach(x=>{const el=document.getElementById(x);if(el)el.value='';});
+  document.getElementById('iqty_').value='1';
+  document.getElementById('ac-list').style.display='none';
+  document.getElementById('add-preview').style.display='none';
 }
+
+// ===== 제품명 자동완성 =====
+function getProductNames(){
+  const names=new Map(); // name → {sku, color, pp} 최근 것
+  [...S.inventory,...S.sales].forEach(i=>{
+    const nm=i.productName;
+    if(nm&&!names.has(nm)) names.set(nm,{sku:i.sku||'',color:i.color||'',pp:i.purchasePrice||0});
+  });
+  return [...names.entries()].map(([name,info])=>({name,...info})).sort((a,b)=>a.name.localeCompare(b.name,'ko'));
+}
+
+function onProductInput(){
+  const q=v('in_').toLowerCase();
+  const all=getProductNames();
+  const filtered=q?all.filter(p=>p.name.toLowerCase().includes(q)):all;
+  showAcList(filtered,q);
+  updateAddPreview();
+}
+
+function toggleProductDrop(){
+  const list=document.getElementById('ac-list');
+  if(list.style.display==='none'){
+    showAcList(getProductNames(),'');
+  }else{
+    list.style.display='none';
+  }
+}
+
+function showAcList(items,q){
+  const list=document.getElementById('ac-list');
+  if(!items.length&&!q){list.style.display='none';return;}
+  const rows=items.slice(0,30).map(p=>`
+    <div onclick="selectProduct('${p.name.replace(/'/g,"\\'")}','${(p.sku||'').replace(/'/g,"\\'")}','${(p.color||'').replace(/'/g,"\\'")}',${p.pp})"
+      style="padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--bd)"
+      onmouseover="this.style.background='var(--bg4)'" onmouseout="this.style.background=''">
+      <span style="font-weight:500">${p.name}</span>
+      ${p.sku?`<span style="color:var(--tx3);margin-left:6px">${p.sku}</span>`:''}
+      ${p.color?`<span style="color:var(--tx2);margin-left:6px">${p.color}</span>`:''}
+    </div>`).join('');
+  const newRow=q&&!items.find(p=>p.name.toLowerCase()===q)?
+    `<div onclick="selectProduct('${q.replace(/'/g,"\\'")}','','',0)"
+      style="padding:8px 12px;cursor:pointer;font-size:12px;color:var(--acc);border-top:1px solid var(--bd)"
+      onmouseover="this.style.background='var(--bg4)'" onmouseout="this.style.background=''">
+      + "<b>${q}</b>" 새로 등록
+    </div>`:'';
+  list.innerHTML=rows+newRow;
+  list.style.display=rows||newRow?'block':'none';
+}
+
+function selectProduct(name,sku,color,pp){
+  document.getElementById('in_').value=name;
+  if(sku) document.getElementById('isku_').value=sku;
+  if(color) document.getElementById('ic_').value=color;
+  if(pp) document.getElementById('ip_').value=pp;
+  document.getElementById('ac-list').style.display='none';
+  updateAddPreview();
+}
+
+function updateAddPreview(){
+  const n=v('in_'),qty=parseInt(v('iqty_'))||1,p=+v('ip_');
+  const prev=document.getElementById('add-preview');
+  if(n&&qty>1){
+    prev.style.display='block';
+    prev.innerHTML=`📦 <b>${n}</b> ${qty}개 등록 예정${p?' · 총 매입가 '+( p*qty).toLocaleString()+'원':''}`;
+  }else{
+    prev.style.display='none';
+  }
+}
+
+// 드롭다운 외부 클릭 시 닫기
+document.addEventListener('click',e=>{
+  if(!e.target.closest('#modal-addInv')) document.getElementById('ac-list').style.display='none';
+});
 function delItem(id){if(!confirm('이 재고를 삭제하시겠습니까?'))return;S.inventory=S.inventory.filter(i=>i.id!==id);window.__safeSave();renderInv();fillSel();}
 
 function quickSell(id){
@@ -1035,6 +1132,7 @@ function openEditInv(id){
   document.getElementById('ei-id').value=id;
   document.getElementById('ei-date').value=i.purchaseDate||'';
   document.getElementById('ei-name').value=i.productName||'';
+  document.getElementById('ei-sku').value=i.sku||'';
   document.getElementById('ei-color').value=i.color||'';
   document.getElementById('ei-size').value=i.size||'';
   document.getElementById('ei-pp').value=i.purchasePrice||0;
@@ -1047,6 +1145,7 @@ function saveEditInv(){
   const i=S.inventory.find(x=>x.id===id);if(!i)return;
   i.purchaseDate=document.getElementById('ei-date').value;
   i.productName=document.getElementById('ei-name').value;
+  i.sku=document.getElementById('ei-sku').value;
   i.color=document.getElementById('ei-color').value;
   i.size=document.getElementById('ei-size').value;
   i.purchasePrice=+document.getElementById('ei-pp').value||0;
