@@ -162,7 +162,7 @@ button.sell-btn:hover{background:var(--acc);color:#000}
 <div id="p-inv" class="pane act">
   <div class="sh"><span class="sh-title">현재 재고</span><button class="pr" onclick="openModal('addInv')">+ 재고 추가</button></div>
   <div class="frow mb12">
-    <input id="iq" placeholder="🔍 제품명·색상 검색" oninput="renderInv()">
+    <input id="iq" placeholder="🔍 제품명·품번·사이즈·색상 검색" oninput="renderInv()">
     <select id="ist" onchange="renderInv()" style="max-width:130px">
       <option value="">전체 상태</option><option value="in_stock">재고중</option><option value="sold">판매완료</option>
     </select>
@@ -827,7 +827,12 @@ function goTab(t){
   if(t==='ana')renderAna();
   if(t==='cfg')renderCfg();
 }
-function openModal(id){document.getElementById('modal-'+id).classList.add('show');}
+function openModal(id){
+  document.getElementById('modal-'+id).classList.add('show');
+  if(id==='addInv'){
+    document.getElementById('id_').value=new Date().toISOString().slice(0,10);
+  }
+}
 function closeModal(id){document.getElementById('modal-'+id).classList.remove('show');}
 document.querySelectorAll('.modal-bg').forEach(mb=>mb.addEventListener('click',e=>{if(e.target===mb)mb.classList.remove('show');}));
 
@@ -846,7 +851,7 @@ function getSK(s){return s.channel==='daangn'?'daangn_'+(s.daangnType||'delivery
 function renderInv(){
   const q=v('iq').toLowerCase(),st=v('ist'),sort=v('isort')||'date_desc';
   let items=S.inventory.filter(i=>{
-    const nm=(i.productName+' '+i.color).toLowerCase();
+    const nm=(i.productName+' '+i.color+' '+(i.sku||'')+' '+i.size).toLowerCase();
     return(!q||nm.includes(q))&&(!st||i.status===st);
   });
   // 정렬
