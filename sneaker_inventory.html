@@ -882,7 +882,7 @@ function getSK(s){return s.channel==='daangn'?'daangn_'+(s.daangnType||'delivery
 
 // 재고
 function renderInv(){
-  const q=v('iq').toLowerCase(),st=v('ist'),sort=v('isort')||'date_desc';
+  const q=v('iq').toLowerCase(),st=v('ist')||'in_stock',sort=v('isort')||'date_desc';
   let items=S.inventory.filter(i=>{
     const nm=(i.productName+' '+i.color+' '+(i.sku||'')+' '+i.size).toLowerCase();
     return(!q||nm.includes(q))&&(!st||i.status===st);
@@ -1468,6 +1468,9 @@ function renderAna(){
 }
 
 function render(){
+  // 재고 탭은 항상 재고중만 기본 표시
+  const istEl=document.getElementById('ist');
+  if(istEl&&!istEl.dataset.userChanged) istEl.value='in_stock';
   renderInv();
   if(curTab==='sale'){fillSel();renderSales();}
   if(curTab==='ship')renderShip();
@@ -1475,6 +1478,9 @@ function render(){
   if(curTab==='cfg')renderCfg();
 }
 document.getElementById('sd').value=new Date().toISOString().slice(0,10);
+
+// 사용자가 직접 필터 변경 시 기록
+document.getElementById('ist')?.addEventListener('change',function(){this.dataset.userChanged='1';});
 </script>
 </body>
 </html>
