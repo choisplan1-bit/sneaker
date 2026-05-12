@@ -120,6 +120,13 @@ tbody tr:hover td{background:rgba(255,255,255,.02)}
 .mt8{margin-top:8px}.mt12{margin-top:12px}.mt16{margin-top:16px}.mt20{margin-top:20px}
 .mb8{margin-bottom:8px}.mb12{margin-bottom:12px}
 .flex{display:flex}.gap8{gap:8px}.gap12{gap:12px}.items-center{align-items:center}
+/* 모바일 컬럼 숨김 */
+.hide-mobile{}
+@media(max-width:600px){
+  .hide-mobile{display:none}
+  table{min-width:unset}
+  .tw{border-radius:var(--rs)}
+}
 .hidden{display:none!important}
 @media(max-width:500px){.fgrid{grid-template-columns:1fr}}
 /* 빠른판매 버튼 */
@@ -164,7 +171,9 @@ button.sell-btn:hover{background:var(--acc);color:#000}
   <div class="frow mb12">
     <input id="iq" placeholder="🔍 제품명·품번·사이즈·색상 검색" oninput="renderInv()">
     <select id="ist" onchange="renderInv()" style="max-width:130px">
-      <option value="">전체 상태</option><option value="in_stock">재고중</option><option value="sold">판매완료</option>
+      <option value="in_stock">재고중</option>
+      <option value="">전체 상태</option>
+      <option value="sold">판매완료</option>
     </select>
     <select id="isort" onchange="renderInv()" style="max-width:140px">
       <option value="date_desc">매입일 최신순</option>
@@ -178,7 +187,17 @@ button.sell-btn:hover{background:var(--acc);color:#000}
     <span id="icnt" style="font-size:12px;color:var(--tx2);white-space:nowrap"></span>
   </div>
   <div class="tw"><table>
-    <thead><tr><th>매입일</th><th>제품명</th><th>품번</th><th>색상</th><th>사이즈</th><th>매입가</th><th>상태</th><th>비고</th><th>판매</th><th></th></tr></thead>
+    <thead><tr>
+      <th>제품명</th>
+      <th>색상</th>
+      <th>사이즈</th>
+      <th>매입가</th>
+      <th class="hide-mobile">품번</th>
+      <th class="hide-mobile">매입일</th>
+      <th class="hide-mobile">비고</th>
+      <th>판매</th>
+      <th></th>
+    </tr></thead>
     <tbody id="ibody"></tbody>
   </table></div>
 </div>
@@ -206,7 +225,11 @@ button.sell-btn:hover{background:var(--acc);color:#000}
       </div>
       <div class="fgrp hidden" id="dtf">
         <label class="flbl">당근 거래 유형</label>
-        <select id="sdt"><option value="delivery">택배거래</option><option value="direct">직거래</option><option value="instant">바로구매</option></select>
+        <select id="sdt" onchange="onDT()"><option value="delivery">택배거래</option><option value="direct">직거래</option><option value="instant">바로구매</option></select>
+      </div>
+      <div class="fgrp hidden" id="daangn-order-f">
+        <label class="flbl">당근 주문번호 <span style="color:var(--tx3);font-size:10px">예: 당근123456</span></label>
+        <input type="text" id="daangn-order" placeholder="당근00000">
       </div>
 
       <!-- 택배비 섹션 -->
@@ -246,7 +269,7 @@ button.sell-btn:hover{background:var(--acc);color:#000}
   </div>
   <div id="dsum" class="mb12"></div>
   <div class="tw"><table>
-    <thead><tr><th>판매일</th><th>제품명</th><th>색상</th><th>사이즈</th><th>매입가</th><th>판매가</th><th>택배비</th><th>순이익</th><th>채널</th><th></th></tr></thead>
+    <thead><tr><th>판매일</th><th>제품명</th><th>색상</th><th>사이즈</th><th>매입가</th><th>판매가</th><th>택배비</th><th>순이익</th><th>채널</th><th>메모</th><th></th></tr></thead>
     <tbody id="sbody"></tbody>
   </table></div>
 </div>
@@ -877,17 +900,17 @@ function renderInv(){
   });
   document.getElementById('icnt').textContent=`총 ${S.inventory.filter(x=>x.status==='in_stock').length}개 재고 / ${items.length}개 표시`;
   const body=document.getElementById('ibody');
-  if(!items.length){body.innerHTML=`<tr><td colspan="9" class="empty">조건에 맞는 재고가 없습니다</td></tr>`;return;}
+  if(!items.length){body.innerHTML=`<tr><td colspan="8" class="empty">조건에 맞는 재고가 없습니다</td></tr>`;return;}
   body.innerHTML=items.map(i=>{
     const isRefund=i.notes&&i.notes.includes('환불불가');
     return`<tr>
-      <td style="color:var(--tx2)">${fd(i.purchaseDate)}</td>
       <td><b>${i.productName}</b></td>
-      <td style="color:var(--tx3);font-size:11px">${i.sku||'—'}</td>
-      <td>${i.color||'—'}</td><td>${i.size}</td>
+      <td>${i.color||'—'}</td>
+      <td>${i.size}</td>
       <td>${won(i.purchasePrice)}</td>
-      <td><span class="bdg ${i.status==='in_stock'?'bdg-stock':'bdg-sold'}">${i.status==='in_stock'?'재고중':'판매완료'}</span></td>
-      <td style="font-size:11px">${isRefund?`<span class="bdg bdg-refund">⚠️ 환불불가</span> `:''}${i.notes&&!isRefund?i.notes:i.notes&&isRefund?i.notes.replace('환불불가','').trim():''}</td>
+      <td class="hide-mobile" style="color:var(--tx3);font-size:11px">${i.sku||'—'}</td>
+      <td class="hide-mobile" style="color:var(--tx2)">${fd(i.purchaseDate)}</td>
+      <td class="hide-mobile" style="font-size:11px">${isRefund?`<span class="bdg bdg-refund">⚠️ 환불불가</span>`:''}${i.notes&&!isRefund?i.notes:''}</td>
       <td>${i.status==='in_stock'?`<button class="sell-btn" onclick="quickSell('${i.id}')">💰 판매</button>`:''}</td>
       <td>${i.status==='in_stock'?`<button class="danger sm" onclick="delItem('${i.id}')">✕</button>`:''}</td>
     </tr>`;
@@ -1019,6 +1042,9 @@ function onCC(){
   const ch=v('sch');
   const cfg=S.cfg||{kreamFee:2500,poisonFee:0,daangnFee:0};
   document.getElementById('dtf').classList.toggle('hidden',ch!=='daangn');
+  // 바로구매일 때만 주문번호 칸 표시
+  const isInstant=ch==='daangn'&&document.getElementById('sdt').value==='instant';
+  document.getElementById('daangn-order-f').classList.toggle('hidden',!isInstant);
   document.getElementById('poison-box').classList.toggle('hidden',ch!=='poison');
   const hint=document.getElementById('kream-hint');
   if(ch==='kream'){
@@ -1180,6 +1206,12 @@ function onCombined(){
   calcProfit();
 }
 
+function onDT(){
+  const isInstant=v('sch')==='daangn'&&v('sdt')==='instant';
+  document.getElementById('daangn-order-f').classList.toggle('hidden',!isInstant);
+  if(!isInstant) document.getElementById('daangn-order').value='';
+}
+
 function regSale(){
   const iid=v('si'),d=v('sd'),sp=+v('sp'),ch=v('sch');
   if(!iid||!d||!sp||!ch){alert('재고, 날짜, 판매가, 채널을 모두 입력해주세요');return;}
@@ -1187,18 +1219,24 @@ function regSale(){
   if(!inv){alert('재고를 찾을 수 없습니다');return;}
   const dt=ch==='daangn'?(v('sdt')||'delivery'):null;
   const fee=+v('sfee')||0;
-  S.sales.unshift({id:gid(),inventoryId:iid,productName:inv.productName,color:inv.color,size:inv.size,purchasePrice:inv.purchasePrice,saleDate:d,salePrice:sp,channel:ch,daangnType:dt,shippingStep:0,shippingFee:fee,notes:v('snote')});
+  const orderNum=v('daangn-order');
+  const noteVal=[orderNum,v('snote')].filter(Boolean).join(' / ');
+  S.sales.unshift({id:gid(),inventoryId:iid,productName:inv.productName,color:inv.color,size:inv.size,purchasePrice:inv.purchasePrice,saleDate:d,salePrice:sp,channel:ch,daangnType:dt,shippingStep:0,shippingFee:fee,notes:noteVal});
   inv.status='sold';
-  window.__safeSave();renderInv();renderSales();renderShip();fillSel();
-  ['si','sp','spr','sch','snote'].forEach(x=>{const el=document.getElementById(x);if(el)el.value='';});
+  window.__safeSave();renderInv();fillSel();
+  ['si','sp','spr','sch','snote','daangn-order'].forEach(x=>{const el=document.getElementById(x);if(el)el.value='';});
   document.getElementById('sfee').value='0';
   document.getElementById('sdt').value='delivery';
   document.getElementById('dtf').classList.add('hidden');
+  document.getElementById('daangn-order-f').classList.add('hidden');
   document.getElementById('poison-box').classList.add('hidden');
   document.getElementById('kream-hint').style.display='none';
   document.getElementById('combined-chk').checked=false;
   document.getElementById('combined-result').textContent='';
-  alert('✅ 판매 등록 완료!');
+  // 판매 완료 후 → 판매내역 탭으로 이동 + 오늘 날짜 필터 자동 적용
+  goTab('sale');
+  document.getElementById('sdf').value=new Date().toISOString().slice(0,10);
+  renderSales();
 }
 
 function renderSales(){
@@ -1229,6 +1267,7 @@ function renderSales(){
       <td style="color:var(--red)">${fee?'-'+fee.toLocaleString()+'원':'-'}</td>
       <td class="${pr>=0?'green':'red'}" style="font-weight:600">${pr>=0?'+':''}${pr.toLocaleString()}원</td>
       <td>${chBdg(s.channel,s.daangnType)}</td>
+      <td style="font-size:11px;color:var(--yellow)">${s.notes||''}</td>
       <td><button class="danger sm" onclick="delSale('${s.id}')">✕</button></td>
     </tr>`;
   }).join('');
@@ -1266,6 +1305,7 @@ function renderShip(){
         <div>
           <div class="ship-name">${s.productName}${s.color?` <span style="font-weight:400;color:var(--tx2)">${s.color}</span>`:''} <span style="font-size:12px;color:var(--tx2)">${s.size}mm</span></div>
           <div class="ship-meta">${fd(s.saleDate)} · ${won(s.salePrice)}${fee?` · 택배비 ${fee.toLocaleString()}원`:''} · ${chBdg(s.channel,s.daangnType)}</div>
+          ${s.notes?`<div style="margin-top:5px;font-size:12px;font-weight:500;color:var(--yellow)">📦 ${s.notes}</div>`:''}
         </div>
         <span class="bdg ${done?'bdg-done':'bdg-pending'}">${done?'✓ 완료':'진행중'}</span>
       </div>
