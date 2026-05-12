@@ -678,8 +678,17 @@ function mkInitData(){
 
 async function saveState(notify=true){
   S.updatedAt=new Date().toISOString();
-  if(fbMode&&window.__fbSave){try{await window.__fbSave(S);if(notify)setStat('저장됨','on');}catch(e){lsSave();}}
-  else{lsSave();if(notify)setStat('로컬 저장','off');}
+  lsSave(); // 항상 로컬에 먼저 저장
+  if(fbMode&&window.__fbSave){
+    try{
+      await window.__fbSave(S);
+      if(notify)setStat('저장됨 ✓','on');
+    }catch(e){
+      if(notify)setStat('오프라인 - 로컬 저장','off');
+    }
+  }else{
+    if(notify)setStat('로컬 저장','off');
+  }
 }
 function lsSave(){try{localStorage.setItem(LS_KEY,JSON.stringify(S));}catch(e){}}
 function lsLoad(){try{const d=localStorage.getItem(LS_KEY);return d?JSON.parse(d):null;}catch(e){return null;}}
@@ -688,15 +697,74 @@ function setStat(msg,mode){
   document.getElementById('sdot').className='sdot'+(mode==='on'?'':' off');
   document.getElementById('last-sync').textContent='마지막 동기화: '+new Date().toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
 }
-async function manualSync(){setStat('동기화 중...','off');if(fbMode&&window.__fbListen){setStat('실시간 연결 중','on');}else{const d=lsLoad();if(d){S=d;}render();setStat('로컬 동기화됨','off');}}
+
+let isSaving=false; // 저장 중 덮어쓰기 방지 플래그
+
+function onFirebaseData(data){
+  if(!data) return;
+  if(isSaving) return; // 내가 저장 중이면 무시
+
+  const fbTime=new Date(data.updatedAt||0).getTime();
+  const localTime=new Date(S.updatedAt||0).getTime();
+
+  // Firebase 데이터가 로컬보다 최신일 때만 반영
+  if(fbTime > localTime){
+    S=data;
+    lsSave();
+    render();
+    setStat('실시간 연결 중','on');
+  } else if(fbTime < localTime){
+    // 로컬이 더 최신 → Firebase에 올려서 통일
+    window.__fbSave(S).catch(()=>{});
+    setStat('실시간 연결 중','on');
+  } else {
+    setStat('실시간 연결 중','on');
+  }
+}
+
+async function manualSync(){
+  setStat('동기화 중...','off');
+  if(fbMode&&window.__fbSave){
+    try{
+      await window.__fbSave(S);
+      setStat('동기화 완료 ✓','on');
+    }catch(e){setStat('연결 오류','off');}
+  }else{
+    const d=lsLoad();if(d){S=d;}render();setStat('로컬 동기화됨','off');
+  }
+}
+
+// saveState 래퍼: 저장 중 플래그 관리
+const _origSaveState=saveState;
+window.__safeSave=async function(notify=true){
+  isSaving=true;
+  await saveState(notify);
+  setTimeout(()=>{isSaving=false;},3000); // 3초간 외부 덮어쓰기 차단
+};
 
 window.addEventListener('fb-ready',()=>{
   if(window.__fbOK&&window.__fbListen){
     fbMode=true;
-    window.__fbListen(data=>{S=data;render();});
+    window.__fbListen(onFirebaseData);
     const local=lsLoad();
-    if(!local){const init=mkInitData();window.__fbSave(init);}
-  }else{const local=lsLoad();if(local){S=local;}else{S=mkInitData();lsSave();}render();setStat('로컬 모드','off');}
+    if(!local){
+      // 최초 실행: 초기 데이터 Firebase에 저장
+      const init=mkInitData();
+      S=init;
+      window.__fbSave(init);
+      render();
+    }
+    // 로컬 데이터 있으면 일단 보여주고, Firebase 응답 오면 비교해서 최신 반영
+    else if(local){
+      S=local;
+      render();
+    }
+    setStat('실시간 연결 중','on');
+  }else{
+    const local=lsLoad();
+    if(local){S=local;}else{S=mkInitData();lsSave();}
+    render();setStat('로컬 모드 (오프라인)','off');
+  }
 });
 setTimeout(()=>{if(!S.inventory.length){const local=lsLoad();if(local){S=local;}else{S=mkInitData();lsSave();}render();}},2000);
 
@@ -768,10 +836,10 @@ function addItem(){
   const d=v('id_'),n=v('in_'),c=v('ic_'),s=v('is_'),p=+v('ip_');
   if(!d||!n||!s||!p){alert('날짜, 제품명, 사이즈, 매입가는 필수입니다');return;}
   S.inventory.unshift({id:gid(),purchaseDate:d,productName:n,color:c,size:s,purchasePrice:p,status:'in_stock',notes:v('ino_')});
-  saveState();renderInv();fillSel();closeModal('addInv');
+  window.__safeSave();renderInv();fillSel();closeModal('addInv');
   ['id_','in_','ic_','is_','ip_','ino_'].forEach(x=>{const el=document.getElementById(x);if(el)el.value='';});
 }
-function delItem(id){if(!confirm('이 재고를 삭제하시겠습니까?'))return;S.inventory=S.inventory.filter(i=>i.id!==id);saveState();renderInv();fillSel();}
+function delItem(id){if(!confirm('이 재고를 삭제하시겠습니까?'))return;S.inventory=S.inventory.filter(i=>i.id!==id);window.__safeSave();renderInv();fillSel();}
 
 function quickSell(id){
   goTab('sale');
@@ -851,7 +919,7 @@ function saveCfg(){
   S.cfg.kreamFee=+document.getElementById('cfg-kream-fee').value||0;
   S.cfg.poisonFee=+document.getElementById('cfg-poison-fee').value||0;
   S.cfg.daangnFee=+document.getElementById('cfg-daangn-fee').value||0;
-  saveState();
+  window.__safeSave();
   alert('✅ 설정이 저장됐습니다!');
 }
 
@@ -907,7 +975,7 @@ function saveEditSale(){
   s.channel=document.getElementById('es-ch').value;
   s.daangnType=document.getElementById('es-dt').value||null;
   s.notes=document.getElementById('es-note').value;
-  saveState();closeModal('editSale');renderEditSales();renderSales();
+  window.__safeSave();closeModal('editSale');renderEditSales();renderSales();
   alert('✅ 수정됐습니다!');
 }
 
@@ -953,7 +1021,7 @@ function saveEditInv(){
   i.size=document.getElementById('ei-size').value;
   i.purchasePrice=+document.getElementById('ei-pp').value||0;
   i.notes=document.getElementById('ei-note').value;
-  saveState();closeModal('editInv');renderEditInv();renderInv();fillSel();
+  window.__safeSave();closeModal('editInv');renderEditInv();renderInv();fillSel();
   alert('✅ 수정됐습니다!');
 }
 
@@ -977,7 +1045,7 @@ function regSale(){
   const fee=+v('sfee')||0;
   S.sales.unshift({id:gid(),inventoryId:iid,productName:inv.productName,color:inv.color,size:inv.size,purchasePrice:inv.purchasePrice,saleDate:d,salePrice:sp,channel:ch,daangnType:dt,shippingStep:0,shippingFee:fee,notes:v('snote')});
   inv.status='sold';
-  saveState();renderInv();renderSales();renderShip();fillSel();
+  window.__safeSave();renderInv();renderSales();renderShip();fillSel();
   ['si','sp','spr','sch','snote'].forEach(x=>{const el=document.getElementById(x);if(el)el.value='';});
   document.getElementById('sfee').value='0';
   document.getElementById('sdt').value='delivery';
@@ -1027,7 +1095,7 @@ function delSale(id){
   if(!confirm('판매 내역을 삭제하시겠습니까?'))return;
   if(sale?.inventoryId){const inv=S.inventory.find(i=>i.id===sale.inventoryId);if(inv)inv.status='in_stock';}
   S.sales=S.sales.filter(s=>s.id!==id);
-  saveState();renderInv();renderSales();renderShip();fillSel();
+  window.__safeSave();renderInv();renderSales();renderShip();fillSel();
 }
 
 // 발송
@@ -1065,7 +1133,7 @@ function setStep(id,i){
   const s=S.sales.find(x=>x.id===id);if(!s)return;
   const steps=STEPS[getSK(s)];
   s.shippingStep=s.shippingStep===i?Math.min(i+1,steps.length-1):Math.min(i,steps.length-1);
-  saveState();renderShip();
+  window.__safeSave();renderShip();
 }
 
 // 수익분석
