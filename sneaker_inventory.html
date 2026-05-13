@@ -23,7 +23,7 @@ try {
   const db = getDatabase(app);
   const dbRef = ref(db, 'sneaker_v3');
   window.__fbSave = async (data) => { await set(dbRef, data); };
-  window.__fbListen = (cb) => { onValue(dbRef, snap => { const v = snap.val(); if(v) cb(v); }); };
+  window.__fbListen = (cb) => { onValue(dbRef, snap => { cb(snap.val() || null); }); };
   window.__fbOK = true;
 } catch(e) { window.__fbOK = false; }
 window.dispatchEvent(new Event('fb-ready'));
@@ -718,7 +718,7 @@ const INIT_SALES=[
 let uid=0;
 const gid=()=>'u'+(uid++).toString(36)+Date.now().toString(36).slice(-4);
 const LS_KEY='sneaker_v3';
-let S={inventory:[],sales:[],updatedAt:null,cfg:{kreamFee:2500,poisonFee:0,daangnFee:0}};
+let S={inventory:[],sales:[],deletedSales:{},updatedAt:null,cfg:{kreamFee:2500,poisonFee:0,daangnFee:0}};
 let fbMode=false;
 let pchart=null,cchart=null;
 let curTab='inv';
@@ -731,12 +731,65 @@ function mkInitData(){
       return{id:'ss'+i,inventoryId:null,productName:r.n,color:r.c,size:r.s,purchasePrice:r.p,saleDate:r.sd,salePrice:r.sp,channel:r.ch,daangnType:r.dt,shippingStep:Math.min(r.step,STEPS[sk].length-1),shippingFee:r.fee||0,notes:''};
     }),
     cfg:{kreamFee:2500,poisonFee:0,daangnFee:0},
+    deletedSales:{},
     updatedAt:new Date().toISOString()
   };
 }
 
 function lsSave(){try{localStorage.setItem(LS_KEY,JSON.stringify(S));}catch(e){}}
 function lsLoad(){try{const d=localStorage.getItem(LS_KEY);return d?JSON.parse(d):null;}catch(e){return null;}}
+function safeTime(v){const t=new Date(v||0).getTime();return Number.isFinite(t)?t:0;}
+function normalizeState(d){
+  d=d||{};
+  return {
+    inventory:Array.isArray(d.inventory)?d.inventory:[],
+    sales:Array.isArray(d.sales)?d.sales:[],
+    deletedSales:(d.deletedSales&&typeof d.deletedSales==='object')?d.deletedSales:{},
+    cfg:{kreamFee:2500,poisonFee:0,daangnFee:0,...(d.cfg||{})},
+    updatedAt:d.updatedAt||null
+  };
+}
+function saleKey(s){
+  return s.id || [s.inventoryId,s.productName,s.color,s.size,s.saleDate,s.salePrice,s.channel,s.notes].join('|');
+}
+function pruneDeletedSales(deletedSales){
+  const keep={};
+  const cutoff=Date.now()-1000*60*60*24*180;
+  Object.entries(deletedSales||{}).forEach(([id,ts])=>{
+    if(safeTime(ts)>=cutoff) keep[id]=ts;
+  });
+  return keep;
+}
+function mergeStates(local,remote){
+  local=normalizeState(local);
+  remote=normalizeState(remote);
+  const localTime=safeTime(local.updatedAt);
+  const remoteTime=safeTime(remote.updatedAt);
+  const primary=remoteTime>=localTime?remote:local;
+  const secondary=remoteTime>=localTime?local:remote;
+  const deletedSales=pruneDeletedSales({...secondary.deletedSales,...primary.deletedSales});
+  const deletedIds=new Set(Object.keys(deletedSales));
+
+  const saleMap=new Map();
+  primary.sales.forEach(s=>{if(s&&!deletedIds.has(saleKey(s)))saleMap.set(saleKey(s),{...s});});
+  secondary.sales.forEach(s=>{if(s&&!deletedIds.has(saleKey(s))&&!saleMap.has(saleKey(s)))saleMap.set(saleKey(s),{...s});});
+  const sales=[...saleMap.values()];
+
+  const invMap=new Map();
+  primary.inventory.forEach(i=>{if(i&&i.id)invMap.set(i.id,{...i});});
+  secondary.inventory.forEach(i=>{if(i&&i.id&&!invMap.has(i.id))invMap.set(i.id,{...i});});
+  const soldIds=new Set(sales.map(s=>s.inventoryId).filter(Boolean));
+  const inventory=[...invMap.values()].map(i=>soldIds.has(i.id)?{...i,status:'sold'}:i);
+
+  return {
+    inventory,
+    sales,
+    deletedSales,
+    cfg:{...secondary.cfg,...primary.cfg},
+    updatedAt:(localTime||remoteTime)?new Date(Math.max(localTime,remoteTime)).toISOString():new Date().toISOString()
+  };
+}
+function sameState(a,b){return JSON.stringify(normalizeState(a))===JSON.stringify(normalizeState(b));}
 function setStat(msg,mode){
   document.getElementById('stxt').textContent=msg+' · '+new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
   document.getElementById('sdot').className='sdot'+(mode==='on'?'':' off');
@@ -787,38 +840,26 @@ function onFirebaseData(data){
   if(!data) return;
   if(isSaving) return;
 
-  const fbSales=Array.isArray(data.sales)?data.sales:[];
-  const fbInv=Array.isArray(data.inventory)?data.inventory:[];
-  const localSalesCnt=S.sales?S.sales.length:0;
-  const localInvCnt=S.inventory?S.inventory.length:0;
+  const before=S;
+  const merged=mergeStates(S,data);
+  const hasLocalOnly=!sameState(merged,data);
+  const changed=!sameState(merged,before);
+  S=merged;
 
-  // ★ 데이터 건수 비교: Firebase가 로컬보다 현저히 적으면 의심 → 무시
-  // (다른 기기의 오래된 데이터가 Firebase를 덮어썼을 가능성)
-  if(fbInitialized){
-    const fbTotal=fbSales.length+fbInv.length;
-    const localTotal=localSalesCnt+localInvCnt;
-    if(localTotal>10 && fbTotal < localTotal-5){
-      console.warn('Firebase 데이터가 로컬보다 적음 - 무시하고 로컬→Firebase 업로드:',fbTotal,'<',localTotal);
-      isSaving=true;
-      window.__fbSave(S).finally(()=>{setTimeout(()=>{isSaving=false;},5000);});
-      setStat('로컬→Firebase 복구 완료','on');
-      return;
-    }
-  }
-
-  const fbTime=new Date(data.updatedAt||0).getTime();
-  const localTime=new Date(S.updatedAt||0).getTime();
-
-  if(fbTime>=localTime){
-    S=data;
-    if(!S.cfg) S.cfg={kreamFee:2500,poisonFee:0,daangnFee:0};
+  if(changed){
     lsSave();
     render();
-    if(!fbInitialized) fbInitialized=true;
-    setStat('실시간 연결 중','on');
+  }
+  if(!fbInitialized) fbInitialized=true;
+
+  if(hasLocalOnly){
+    isSaving=true;
+    window.__fbSave(S)
+      .then(()=>setStat(changed?'병합 저장됨 ✓':'실시간 연결 중','on'))
+      .catch(()=>setStat('저장 실패 - 동기화 확인 필요','off'))
+      .finally(()=>setTimeout(()=>{isSaving=false;},5000));
   }else{
     setStat('실시간 연결 중','on');
-    if(!fbInitialized) fbInitialized=true;
   }
 }
 
@@ -1548,7 +1589,9 @@ function delSale(id){
     });
   }
 
-  S.sales=S.sales.filter(s=>s.id!==id);
+  if(!S.deletedSales||typeof S.deletedSales!=='object') S.deletedSales={};
+  S.deletedSales[saleKey(sale)]=new Date().toISOString();
+  S.sales=S.sales.filter(s=>saleKey(s)!==saleKey(sale));
   window.__safeSave();renderInv();renderSales();renderShip();fillSel();
   alert('✅ ' + (restored ? '재고중으로 복구됐습니다.' : '재고에 새로 추가됐습니다. (환불 재입고)'));
 }
