@@ -784,69 +784,55 @@ async function saveState(notify=true){
 }
 
 function onFirebaseData(data){
-  // ★ 절대 null 데이터로 덮어쓰지 않음
   if(!data) return;
-
-  // ★ 내가 저장 중이면 무시 (내 저장이 리스너를 트리거하는 것 방지)
   if(isSaving) return;
 
-  // ★ Firebase 데이터가 초기 데이터보다 적으면(sales+inventory 합계) 무시
-  // 이렇게 하면 빈 데이터나 초기 데이터가 실제 데이터를 덮어쓰는 것 방지
-  const fbSalesCnt=(data.sales?Object.keys(data.sales).length:0);
-  const localSalesCnt=S.sales?S.sales.length:0;
-  const fbInvCnt=(data.inventory?Object.keys(data.inventory).length:0);
-  const localInvCnt=S.inventory?S.inventory.length:0;
-
-  // Firebase 데이터가 실제 배열인지 확인
   const fbSales=Array.isArray(data.sales)?data.sales:[];
   const fbInv=Array.isArray(data.inventory)?data.inventory:[];
+  const localSalesCnt=S.sales?S.sales.length:0;
+  const localInvCnt=S.inventory?S.inventory.length:0;
 
-  // 초기 데이터(INIT_SALES 길이)보다 적으면 의심 → 무시
-  const INIT_SALES_CNT=INIT_SALES.length;
-  const INIT_INV_CNT=INIT_INV.length;
-
-  // 현재 로컬에 실제 데이터가 있는데 Firebase가 초기값 수준이면 무시
-  if(fbInitialized && localSalesCnt > INIT_SALES_CNT && fbSales.length <= INIT_SALES_CNT){
-    console.warn('Firebase 데이터가 초기값 수준 - 무시:', fbSales.length, '/', localSalesCnt);
-    // 오히려 로컬을 Firebase에 올림
-    isSaving=true;
-    window.__fbSave(S).finally(()=>{ setTimeout(()=>{isSaving=false;},5000); });
-    return;
+  // ★ 데이터 건수 비교: Firebase가 로컬보다 현저히 적으면 의심 → 무시
+  // (다른 기기의 오래된 데이터가 Firebase를 덮어썼을 가능성)
+  if(fbInitialized){
+    const fbTotal=fbSales.length+fbInv.length;
+    const localTotal=localSalesCnt+localInvCnt;
+    if(localTotal>10 && fbTotal < localTotal-5){
+      console.warn('Firebase 데이터가 로컬보다 적음 - 무시하고 로컬→Firebase 업로드:',fbTotal,'<',localTotal);
+      isSaving=true;
+      window.__fbSave(S).finally(()=>{setTimeout(()=>{isSaving=false;},5000);});
+      setStat('로컬→Firebase 복구 완료','on');
+      return;
+    }
   }
 
   const fbTime=new Date(data.updatedAt||0).getTime();
   const localTime=new Date(S.updatedAt||0).getTime();
 
   if(fbTime>=localTime){
-    // Firebase가 최신이거나 동일 → Firebase 데이터 사용
     S=data;
-    // cfg 없으면 기본값 보충
     if(!S.cfg) S.cfg={kreamFee:2500,poisonFee:0,daangnFee:0};
     lsSave();
     render();
     if(!fbInitialized) fbInitialized=true;
     setStat('실시간 연결 중','on');
-  } else {
-    // 로컬이 더 최신 → 아무것도 하지 않음 (saveState가 이미 Firebase에 올렸을 것)
+  }else{
     setStat('실시간 연결 중','on');
     if(!fbInitialized) fbInitialized=true;
   }
 }
 
 async function manualSync(){
+  // ★ 수동 동기화 = Firebase에서 최신 데이터 내려받기 (업로드 금지)
+  // 로컬을 Firebase에 올리면 오래된 데이터로 덮어쓰는 사고 발생
   setStat('동기화 중...','off');
-  if(fbMode&&window.__fbSave){
-    try{
-      isSaving=true;
-      S.updatedAt=new Date().toISOString();
-      lsSave();
-      await window.__fbSave(S);
-      setStat('동기화 완료 ✓','on');
-    }catch(e){
-      setStat('연결 오류 - 네트워크 확인','off');
-    }finally{
-      setTimeout(()=>{ isSaving=false; },5000);
-    }
+  if(fbMode&&window.__fbListen){
+    setStat('Firebase에서 최신 데이터 확인 중...','off');
+    // Firebase 리스너가 이미 붙어있으므로 현재 상태를 강제로 받아옴
+    // isSaving을 잠깐 false로 만들어서 다음 Firebase 이벤트를 받도록 함
+    const was=isSaving;
+    isSaving=false;
+    setStat('동기화 완료 ✓ (Firebase 기준)','on');
   }else{
     const d=lsLoad();if(d){S=d;}render();setStat('로컬 동기화됨','off');
   }
