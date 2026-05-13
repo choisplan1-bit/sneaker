@@ -8,7 +8,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 const firebaseConfig = {
   apiKey: "AIzaSyD3NA3AArsf-gpi7BYah2HlKY7tMNInn7o",
   authDomain: "sneaker-66cba.firebaseapp.com",
@@ -21,8 +21,11 @@ const firebaseConfig = {
 try {
   const app = initializeApp(firebaseConfig);
   const db = getDatabase(app);
-  const dbRef = ref(db, 'sneaker_v3');
+  const dbRef = ref(db, 'sneaker_v20_stable');
+  const legacyRef = ref(db, 'sneaker_v3');
   window.__fbSave = async (data) => { await set(dbRef, data); };
+  window.__fbGet = async () => { const snap = await get(dbRef); return snap.val() || null; };
+  window.__fbGetLegacy = async () => { const snap = await get(legacyRef); return snap.val() || null; };
   window.__fbListen = (cb) => { onValue(dbRef, snap => { cb(snap.val() || null); }); };
   window.__fbOK = true;
 } catch(e) { window.__fbOK = false; }
@@ -717,7 +720,8 @@ const INIT_SALES=[
 
 let uid=0;
 const gid=()=>'u'+(uid++).toString(36)+Date.now().toString(36).slice(-4);
-const LS_KEY='sneaker_v3';
+const LS_KEY='sneaker_v20_stable';
+const LEGACY_LS_KEY='sneaker_v3';
 let S={inventory:[],sales:[],deletedSales:{},updatedAt:null,cfg:{kreamFee:2500,poisonFee:0,daangnFee:0}};
 let fbMode=false;
 let pchart=null,cchart=null;
@@ -738,6 +742,7 @@ function mkInitData(){
 
 function lsSave(){try{localStorage.setItem(LS_KEY,JSON.stringify(S));}catch(e){}}
 function lsLoad(){try{const d=localStorage.getItem(LS_KEY);return d?JSON.parse(d):null;}catch(e){return null;}}
+function legacyLsLoad(){try{const d=localStorage.getItem(LEGACY_LS_KEY);return d?JSON.parse(d):null;}catch(e){return null;}}
 function safeTime(v){const t=new Date(v||0).getTime();return Number.isFinite(t)?t:0;}
 function normalizeState(d){
   d=d||{};
@@ -779,7 +784,10 @@ function mergeStates(local,remote){
   primary.inventory.forEach(i=>{if(i&&i.id)invMap.set(i.id,{...i});});
   secondary.inventory.forEach(i=>{if(i&&i.id&&!invMap.has(i.id))invMap.set(i.id,{...i});});
   const soldIds=new Set(sales.map(s=>s.inventoryId).filter(Boolean));
-  const inventory=[...invMap.values()].map(i=>soldIds.has(i.id)?{...i,status:'sold'}:i);
+  const inventory=[...invMap.values()].map(i=>{
+    if(soldIds.has(i.id)) return {...i,status:'sold'};
+    return i.status==='sold'?{...i,status:'in_stock'}:i;
+  });
 
   return {
     inventory,
@@ -790,6 +798,35 @@ function mergeStates(local,remote){
   };
 }
 function sameState(a,b){return JSON.stringify(normalizeState(a))===JSON.stringify(normalizeState(b));}
+function hasUserData(d){
+  const n=normalizeState(d);
+  return n.inventory.length>0 || n.sales.length>0;
+}
+function countState(d){
+  const n=normalizeState(d);
+  return n.inventory.length+n.sales.length;
+}
+function rememberBackup(label,data){
+  try{
+    const key='sneaker_auto_backup_hist_v20';
+    const hist=JSON.parse(localStorage.getItem(key)||'[]');
+    hist.unshift({label,date:new Date().toISOString(),data:normalizeState(data)});
+    localStorage.setItem(key,JSON.stringify(hist.slice(0,20)));
+  }catch(e){}
+}
+async function fbSaveMerged(state){
+  const localSnapshot=normalizeState(state);
+  let remote=null;
+  if(window.__fbGet){
+    try{remote=await window.__fbGet();}catch(e){}
+  }
+  const merged=remote?mergeStates(localSnapshot,remote):localSnapshot;
+  merged.updatedAt=new Date().toISOString();
+  S=merged;
+  lsSave();
+  rememberBackup('save',S);
+  await window.__fbSave(S);
+}
 function setStat(msg,mode){
   document.getElementById('stxt').textContent=msg+' · '+new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
   document.getElementById('sdot').className='sdot'+(mode==='on'?'':' off');
@@ -816,13 +853,13 @@ async function saveState(notify=true){
   const snapshot=JSON.stringify(S); // 현재 데이터 스냅샷
 
   try{
-    await window.__fbSave(JSON.parse(snapshot));
+    await fbSaveMerged(JSON.parse(snapshot));
     if(notify) setStat('저장됨 ✓','on');
   }catch(e){
     setStat('저장 실패 - 재시도 중...','off');
     retryTimer=setTimeout(async()=>{
       try{
-        await window.__fbSave(JSON.parse(snapshot));
+        await fbSaveMerged(JSON.parse(snapshot));
         setStat('재시도 저장 완료 ✓','on');
       }catch(e2){
         setStat('오프라인 - 연결 확인 필요','off');
@@ -854,7 +891,7 @@ function onFirebaseData(data){
 
   if(hasLocalOnly){
     isSaving=true;
-    window.__fbSave(S)
+    fbSaveMerged(S)
       .then(()=>setStat(changed?'병합 저장됨 ✓':'실시간 연결 중','on'))
       .catch(()=>setStat('저장 실패 - 동기화 확인 필요','off'))
       .finally(()=>setTimeout(()=>{isSaving=false;},5000));
@@ -885,27 +922,44 @@ window.addEventListener('fb-ready',()=>{
   if(window.__fbOK&&window.__fbListen){
     fbMode=true;
 
-    // 로컬 데이터 있으면 즉시 보여주기 (빠른 초기 로딩)
+    // 새 안정 저장소(v20)가 있으면 우선 사용, 없으면 기존 v3 로컬 데이터를 마이그레이션 후보로 표시
     const local=lsLoad();
-    if(local&&local.inventory&&local.inventory.length){
-      S=local;
+    const legacyLocal=legacyLsLoad();
+    if(hasUserData(local)){
+      S=normalizeState(local);
       render();
+    }else if(hasUserData(legacyLocal)){
+      S=normalizeState(legacyLocal);
+      render();
+      setStat('기존 데이터 마이그레이션 준비','off');
     }
 
-    // Firebase 리스너 - Firebase가 단일 진실 소스
+    // Firebase 리스너 - 새 안정 저장소만 사용. 기존 v3는 최초 마이그레이션 때만 읽음.
     window.__fbListen(data=>{
       if(!data){
-        // Firebase 비어있음
-        if(local&&local.inventory&&local.inventory.length){
-          // 로컬에 데이터 있음 → 로컬을 Firebase에 올림 (절대 mkInitData 안 씀)
+        const seed=hasUserData(local)?local:(hasUserData(legacyLocal)?legacyLocal:null);
+        if(seed){
           isSaving=true;
-          window.__fbSave(local)
-            .then(()=>{ fbInitialized=true; setStat('로컬→Firebase 업로드 완료','on'); })
+          const seeded=normalizeState(seed);
+          seeded.updatedAt=new Date().toISOString();
+          window.__fbSave(seeded)
+            .then(()=>{ S=seeded; lsSave(); fbInitialized=true; setStat('안정 저장소로 이전 완료','on'); })
             .catch(()=>setStat('업로드 실패','off'))
             .finally(()=>{ setTimeout(()=>{isSaving=false;},5000); });
+        }else if(window.__fbGetLegacy){
+          isSaving=true;
+          window.__fbGetLegacy()
+            .then(legacy=>{
+              if(hasUserData(legacy)){
+                const seeded=normalizeState(legacy);
+                seeded.updatedAt=new Date().toISOString();
+                return window.__fbSave(seeded).then(()=>{S=seeded;lsSave();render();setStat('기존 서버 데이터 이전 완료','on');});
+              }
+              setStat('새 저장소 준비됨','on');
+            })
+            .catch(()=>setStat('기존 데이터 확인 실패','off'))
+            .finally(()=>{ fbInitialized=true; setTimeout(()=>{isSaving=false;},5000); });
         }
-        // 로컬도 없으면 → 아무것도 안 함, 그냥 기다림
-        // (mkInitData를 자동으로 Firebase에 올리지 않음)
         return;
       }
       onFirebaseData(data);
@@ -1318,7 +1372,7 @@ function restoreData(input){
       lsSave();
       if(fbMode&&window.__fbSave){
         isSaving=true;
-        window.__fbSave(S)
+        fbSaveMerged(S)
           .then(()=>{ setStat('복원 완료 ✓','on'); })
           .catch(()=>setStat('복원됨 (Firebase 오류)','off'))
           .finally(()=>{ setTimeout(()=>{isSaving=false;},5000); });
