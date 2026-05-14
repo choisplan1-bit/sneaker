@@ -187,7 +187,15 @@ button.sell-btn:hover{background:var(--acc);color:#000}
       <option value="price_asc">매입가 낮은순</option>
       <option value="price_desc">매입가 높은순</option>
     </select>
-    <span id="icnt" style="font-size:12px;color:var(--tx2);white-space:nowrap"></span>
+  </div>
+  <div class="frow mb12" style="align-items:center;gap:8px">
+    <label style="font-size:12px;color:var(--tx2);white-space:nowrap">📅 구매일 검색</label>
+    <input type="date" id="idate-from" onchange="renderInv()" style="max-width:140px">
+    <span style="font-size:12px;color:var(--tx3)">~</span>
+    <input type="date" id="idate-to" onchange="renderInv()" style="max-width:140px">
+    <button class="sm" onclick="clearDateFilter()" style="white-space:nowrap">✕ 초기화</button>
+    <span id="idate-summary" style="font-size:12px;color:var(--acc);font-weight:600;white-space:nowrap"></span>
+    <span id="icnt" style="font-size:12px;color:var(--tx2);white-space:nowrap;margin-left:auto"></span>
   </div>
   <div class="tw"><table>
     <thead><tr>
@@ -1099,13 +1107,30 @@ function chBdg(ch,dt){
 }
 function getSK(s){return s.channel==='daangn'?'daangn_'+(s.daangnType||'delivery'):s.channel;}
 
+// 구매일 필터 초기화
+function clearDateFilter(){
+  const df=document.getElementById('idate-from');
+  const dt=document.getElementById('idate-to');
+  if(df) df.value='';
+  if(dt) dt.value='';
+  renderInv();
+}
+
 // 재고
 function renderInv(){
   const q=v('iq').toLowerCase(),st=v('ist')||'in_stock',sort=v('isort')||'date_desc';
+  const dateFrom=(document.getElementById('idate-from')?.value)||'';
+  const dateTo=(document.getElementById('idate-to')?.value)||'';
+
   let items=S.inventory.filter(i=>{
     const nm=(i.productName+' '+i.color+' '+(i.sku||'')+' '+i.size).toLowerCase();
-    return(!q||nm.includes(q))&&(!st||i.status===st);
+    if(!(!q||nm.includes(q))) return false;
+    if(!(!st||i.status===st)) return false;
+    if(dateFrom && i.purchaseDate < dateFrom) return false;
+    if(dateTo   && i.purchaseDate > dateTo)   return false;
+    return true;
   });
+
   // 정렬
   items.sort((a,b)=>{
     if(sort==='date_desc') return b.purchaseDate.localeCompare(a.purchaseDate);
@@ -1117,6 +1142,16 @@ function renderInv(){
     if(sort==='price_desc') return b.purchasePrice-a.purchasePrice;
     return 0;
   });
+
+  // 날짜 필터 적용 시 소계 표시
+  const sumEl=document.getElementById('idate-summary');
+  if((dateFrom||dateTo) && sumEl){
+    const totalAmt=items.reduce((a,i)=>a+i.purchasePrice,0);
+    sumEl.textContent=`${items.length}개 · 합계 ${won(totalAmt)}`;
+  } else if(sumEl){
+    sumEl.textContent='';
+  }
+
   document.getElementById('icnt').textContent=`총 ${S.inventory.filter(x=>x.status==='in_stock').length}개 재고 / ${items.length}개 표시`;
   const body=document.getElementById('ibody');
   if(!items.length){body.innerHTML=`<tr><td colspan="8" class="empty">조건에 맞는 재고가 없습니다</td></tr>`;return;}
@@ -1596,6 +1631,7 @@ function saveEditSale(){
 function renderEditInv(){
   const q=(document.getElementById('eiq')?.value||'').toLowerCase();
   let items=S.inventory.filter(i=>{
+    if(i.status!=='in_stock') return false; // ★ 판매완료 항목 제외
     const nm=(i.productName+' '+i.color).toLowerCase();
     return !q||nm.includes(q);
   }).sort((a,b)=>b.purchaseDate.localeCompare(a.purchaseDate)).slice(0,50);
