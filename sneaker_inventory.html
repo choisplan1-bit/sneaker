@@ -1744,14 +1744,21 @@ function regSale(){
 
 function renderSales(){
   const df=v('sdf'),cf=v('scf');
-  // ★ 완료된 판매만 표시 (대기열 항목 제외)
-  let sl=S.sales.filter(s=>isShipDone(s)&&(!df||s.saleDate===df)&&(!cf||s.channel===cf)).sort((a,b)=>b.saleDate.localeCompare(a.saleDate));
+  // 전체 판매 표시 (대기 포함), 완료된 것 먼저 정렬
+  let sl=S.sales.filter(s=>(!df||s.saleDate===df)&&(!cf||s.channel===cf))
+    .sort((a,b)=>{
+      // 완료된 것 위, 대기 아래 (같은 날짜 내에서)
+      if(isShipDone(a)!==isShipDone(b)) return isShipDone(a)?-1:1;
+      return b.saleDate.localeCompare(a.saleDate);
+    });
   if(df){
+    // 소계는 전체(대기 포함) 기준
     const tv=sl.reduce((a,s)=>a+s.salePrice,0);
     const pv=sl.reduce((a,s)=>a+(s.salePrice-s.purchasePrice-(s.shippingFee||0)),0);
     const tf=sl.reduce((a,s)=>a+(s.shippingFee||0),0);
+    const pendingCnt=sl.filter(s=>!isShipDone(s)).length;
     document.getElementById('dsum').innerHTML=`<div class="sgrid" style="grid-template-columns:repeat(4,1fr)">
-      <div class="scard"><div class="slbl">판매 수량</div><div class="sval">${sl.length}개</div></div>
+      <div class="scard"><div class="slbl">판매 수량</div><div class="sval">${sl.length}개${pendingCnt?`<span style="font-size:11px;color:var(--orange);margin-left:4px">(대기 ${pendingCnt})</span>`:''}</div></div>
       <div class="scard"><div class="slbl">총 판매액</div><div class="sval">${Math.round(tv/10000)}만원</div></div>
       <div class="scard"><div class="slbl">총 택배비</div><div class="sval red">-${tf.toLocaleString()}</div></div>
       <div class="scard"><div class="slbl">총 순이익</div><div class="sval ${pv>=0?'green':'red'}">${pv>=0?'+':''}${pv.toLocaleString()}원</div></div>
@@ -1762,17 +1769,21 @@ function renderSales(){
   body.innerHTML=sl.map(s=>{
     const fee=s.shippingFee||0;
     const pr=s.salePrice-s.purchasePrice-fee;
-    return`<tr>
+    const pending=!isShipDone(s);
+    return`<tr style="${pending?'opacity:.75':''}">
       <td style="color:var(--tx2)">${fd(s.saleDate)}</td>
-      <td><b>${s.productName}</b></td>
+      <td><b>${s.productName}</b>${pending?'<span class="bdg" style="background:rgba(251,146,60,.15);color:var(--orange);margin-left:6px;font-size:10px">대기</span>':''}</td>
       <td>${s.color||'—'}</td><td>${s.size}</td>
       <td style="color:var(--tx3)">${won(s.purchasePrice)}</td>
       <td>${won(s.salePrice)}</td>
       <td style="color:var(--red)">${fee?'-'+fee.toLocaleString()+'원':'-'}</td>
-      <td class="${pr>=0?'green':'red'}" style="font-weight:600">${pr>=0?'+':''}${pr.toLocaleString()}원</td>
+      <td class="${pr>=0?'green':'red'}" style="font-weight:600">${pending?`<span style="color:var(--tx3)">${pr>=0?'+':''}${pr.toLocaleString()}원</span>`:`${pr>=0?'+':''}${pr.toLocaleString()}원`}</td>
       <td>${chBdg(s.channel,s.daangnType)}</td>
       <td style="font-size:11px;color:var(--yellow)">${s.notes||''}</td>
-      <td><button class="danger sm" onclick="delSale('${s.id}')">✕</button></td>
+      <td>${pending
+        ?`<button class="danger sm" onclick="cancelReservation('${s.id}')">✕ 취소</button>`
+        :`<button class="danger sm" onclick="delSale('${s.id}')">✕</button>`
+      }</td>
     </tr>`;
   }).join('');
 }
@@ -1871,11 +1882,13 @@ function renderShip(){
     // 액션 버튼 영역
     let actionH='';
     if(!done){
+      // 당근 직거래: 모든 단계에 예약취소 버튼 표시 (거래완료 전까지)
+      const cancelBtn=isDirect?`<button class="sm danger" onclick="cancelReservation('${s.id}')" style="margin-left:auto">✕ 예약 취소</button>`:'';
+
       if(isDirect && cur===0){
-        // 예약 단계: 예약취소 버튼
-        actionH=`<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
-          <button class="sm" onclick="advanceShip('${s.id}')" style="border-color:var(--acc);color:var(--acc)">→ 준비로 이동</button>
-          <button class="sm danger" onclick="cancelReservation('${s.id}')">✕ 예약 취소</button>
+        actionH=`<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <button class="sm" onclick="advanceShip('${s.id}')" style="border-color:var(--acc);color:var(--acc)">→ 준비</button>
+          ${cancelBtn}
         </div>`;
       } else if(isDirect && cur===2){
         // 선불/후불 단계
@@ -1885,18 +1898,19 @@ function renderShip(){
           <button class="sm ${pt==='prepay'?'pr':''}" onclick="setPayType('${s.id}','prepay')">💳 선불</button>
           <button class="sm ${pt==='postpay'?'pr':''}" onclick="setPayType('${s.id}','postpay')">🤝 후불</button>
           ${pt?`<button class="sm" onclick="advanceShip('${s.id}')" style="border-color:var(--acc);color:var(--acc)">→ 거래완료로</button>`:''}
+          ${cancelBtn}
         </div>`;
       } else if(isLastStep){
-        // 마지막 단계: 완료 버튼
         const lbl=isDirect?'✅ 거래 완료':'✅ 발송 완료';
-        actionH=`<div style="margin-top:10px">
+        actionH=`<div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <button class="pr" onclick="completeShip('${s.id}')">${lbl}</button>
+          ${cancelBtn}
         </div>`;
       } else {
-        // 일반 다음 단계 버튼
         const nextLbl=steps[cur+1]||'다음';
-        actionH=`<div style="margin-top:10px">
+        actionH=`<div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <button class="sm" onclick="advanceShip('${s.id}')" style="border-color:var(--acc);color:var(--acc)">→ ${nextLbl}</button>
+          ${cancelBtn}
         </div>`;
       }
     }
@@ -1969,16 +1983,18 @@ function completeShip(id){
 
 function cancelReservation(id){
   const s=S.sales.find(x=>x.id===id);if(!s)return;
-  if(!confirm(`예약을 취소하시겠습니까?\n${s.productName}${s.color?' '+s.color:''} ${s.size}mm\n취소 시 재고가 복구됩니다.`))return;
+  const isDirect=getSK(s)==='daangn_direct';
+  const label=isDirect?'예약':'대기 판매';
+  if(!confirm(`${label}을 취소하시겠습니까?\n${s.productName}${s.color?' '+s.color:''} ${s.size}mm\n취소 시 재고가 복구됩니다.`))return;
   // 재고 복구
   const inv=S.inventory.find(i=>i.id===s.inventoryId);
-  if(inv&&inv.status==='reserved') inv.status='in_stock';
+  if(inv&&(inv.status==='reserved'||inv.status==='sold')) inv.status='in_stock';
   // deletedSales 기록
   if(!S.deletedSales) S.deletedSales={};
   S.deletedSales[saleKey(s)]=new Date().toISOString();
   S.sales=S.sales.filter(x=>x.id!==id);
-  window.__safeSave();renderInv();fillSel();renderShip();
-  alert('예약이 취소되고 재고가 복구됐습니다.');
+  window.__safeSave();renderInv();fillSel();renderShip();renderSales();
+  alert(`${label}이 취소되고 재고가 복구됐습니다.`);
 }
 
 // 수익분석
@@ -2011,8 +2027,8 @@ function renderAna(){
   if(pf) anaPeriodFrom=pf;
   if(pt) anaPeriodTo=pt;
 
-  // ★ 완료된 판매만 집계 (대기열 항목 제외)
-  const doneSales=S.sales.filter(s=>isShipDone(s));
+  // 전체 판매 집계 (대기 포함)
+  const doneSales=S.sales; // 대기 포함 전체
 
   // 기간 필터된 판매
   const periodSales=doneSales.filter(s=>{
@@ -2097,7 +2113,9 @@ function renderAna(){
         <div class="sval">${periodSales.length}건</div>
         <div class="ssub ${pP>=0?'green':'red'}">${pP>=0?'+':''}${Math.round(pP/10000)}만원 이익</div>
       </div>
-      <div class="scard"><div class="slbl">누적 순이익</div><div class="sval green">+${Math.round(tP/10000)}만원</div></div>
+      <div class="scard"><div class="slbl">누적 순이익</div><div class="sval green">+${Math.round(tP/10000)}만원</div>
+        ${(()=>{const pc=S.sales.filter(s=>!isShipDone(s)).length;return pc?`<div class="ssub" style="color:var(--orange)">대기 ${pc}건 포함</div>`:''})()}
+      </div>
       <div class="scard"><div class="slbl">재고 자산</div><div class="sval acc">${Math.round(sv/10000)}만원</div><div class="ssub">${scnt}개</div></div>
     </div>
 
