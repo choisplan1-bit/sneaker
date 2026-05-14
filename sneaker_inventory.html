@@ -176,6 +176,7 @@ button.sell-btn:hover{background:var(--acc);color:#000}
     <select id="ist" onchange="renderInv()" style="max-width:130px">
       <option value="in_stock">재고중</option>
       <option value="">전체 상태</option>
+      <option value="reserved">예약중</option>
       <option value="sold">판매완료</option>
     </select>
     <select id="isort" onchange="renderInv()" style="max-width:140px">
@@ -289,9 +290,20 @@ button.sell-btn:hover{background:var(--acc);color:#000}
 <div id="p-ship" class="pane">
   <div class="sh">
     <span class="sh-title">발송 현황</span>
-    <div class="frow" style="margin:0">
-      <select id="shf" onchange="renderShip()" style="width:110px;flex:none"><option value="pending">진행 중</option><option value="all">전체</option><option value="done">완료</option></select>
-      <select id="shcf" onchange="renderShip()" style="width:110px;flex:none"><option value="">전체 채널</option><option value="daangn">당근</option><option value="poison">포이즌</option><option value="kream">크림</option></select>
+    <div class="frow" style="margin:0;gap:6px">
+      <select id="shf" onchange="renderShip()" style="width:110px;flex:none">
+        <option value="pending">대기열</option>
+        <option value="done">완료</option>
+        <option value="all">전체</option>
+      </select>
+      <select id="shcf" onchange="renderShip()" style="width:120px;flex:none">
+        <option value="">전체 채널</option>
+        <option value="daangn_direct">당근 직거래</option>
+        <option value="daangn_instant">당근 바로구매</option>
+        <option value="daangn_delivery">당근 택배</option>
+        <option value="poison">포이즌</option>
+        <option value="kream">크림</option>
+      </select>
     </div>
   </div>
   <div id="shlist"></div>
@@ -462,11 +474,11 @@ button.sell-btn:hover{background:var(--acc);color:#000}
 
 <script>
 const STEPS={
-  kream:['발송 준비','크림 발송','크림 입고','크림 검수','구매자 발송','완료'],
-  poison:['발송 준비','포이즌 발송','포이즌 입고','포이즌 검수','구매자 발송','완료'],
-  daangn_delivery:['발송 준비','택배 발송','구매자 수령','완료'],
-  daangn_direct:['거래 예약','직거래 완료'],
-  daangn_instant:['결제 확인','발송 준비','택배 발송','구매자 수령','완료']
+  kream:           ['발송 준비','택배 예약','택배 발송','크림 입고','검수 통과','완료'],
+  poison:          ['발송 준비','택배 예약','택배 발송','포이즌 입고','검수 통과','완료'],
+  daangn_delivery: ['발송 준비','택배 예약','택배 발송','구매자 수령','완료'],
+  daangn_direct:   ['예약','준비','선불/후불','거래 완료'],
+  daangn_instant:  ['발송 준비','수거 완료','거래 완료'],
 };
 const DT_LABEL={delivery:'택배',direct:'직거래',instant:'바로구매'};
 
@@ -955,9 +967,15 @@ function onFirebaseData(data){
 
   // 재고 상태: 활성 판매 기준으로 조정
   const soldByInvId=new Set(sales.map(s=>s.inventoryId).filter(Boolean));
+  // 예약중 판매 (daangn_direct, shippingDone=false, step<last)
+  const reservedByInvId=new Set(
+    sales.filter(s=>getSK(s)==='daangn_direct'&&!isShipDone(s))
+         .map(s=>s.inventoryId).filter(Boolean)
+  );
   const inventory=deduplicateInventory(fbData.inventory).map(i=>{
+    if(reservedByInvId.has(i.id)) return {...i,status:'reserved'};
     if(soldByInvId.has(i.id)) return {...i,status:'sold'};
-    if(i.status==='sold') return {...i,status:'in_stock'};
+    if(i.status==='sold'||i.status==='reserved') return {...i,status:'in_stock'};
     return i;
   });
 
@@ -1094,6 +1112,11 @@ function chBdg(ch,dt){
   if(ch==='kream')return`<span class="bdg bdg-kream">크림</span>`;
   return'';
 }
+// 발송 완료 여부: shippingDone 필드 없는 구버전 데이터는 완료로 처리
+function isShipDone(s){
+  if(s.shippingDone===undefined) return true; // 구버전 데이터 호환
+  return s.shippingDone===true;
+}
 function getSK(s){return s.channel==='daangn'?'daangn_'+(s.daangnType||'delivery'):s.channel;}
 
 // 구매일 필터 초기화
@@ -1146,8 +1169,9 @@ function renderInv(){
   if(!items.length){body.innerHTML=`<tr><td colspan="8" class="empty">조건에 맞는 재고가 없습니다</td></tr>`;return;}
   body.innerHTML=items.map(i=>{
     const isRefund=i.notes&&i.notes.includes('환불불가');
-    return`<tr>
-      <td><b>${i.productName}</b></td>
+    const isReserved=i.status==='reserved';
+    return`<tr style="${isReserved?'opacity:.7':''}">
+      <td><b>${i.productName}</b>${isReserved?'<span class="bdg" style="background:rgba(251,191,36,.15);color:var(--yellow);margin-left:6px">예약중</span>':''}</td>
       <td>${i.color||'—'}</td>
       <td>${i.size}</td>
       <td>${won(i.purchasePrice)}</td>
@@ -1691,8 +1715,17 @@ function regSale(){
   const fee=+v('sfee')||0;
   const orderNum=v('daangn-order');
   const noteVal=[orderNum,v('snote')].filter(Boolean).join(' / ');
-  S.sales.unshift({id:gid(),inventoryId:iid,productName:inv.productName,color:inv.color,size:inv.size,purchasePrice:inv.purchasePrice,saleDate:d,salePrice:sp,channel:ch,daangnType:dt,shippingStep:0,shippingFee:fee,notes:noteVal});
-  inv.status='sold';
+  const isDirect=ch==='daangn'&&dt==='direct';
+  S.sales.unshift({
+    id:gid(),inventoryId:iid,
+    productName:inv.productName,color:inv.color,size:inv.size,
+    purchasePrice:inv.purchasePrice,saleDate:d,salePrice:sp,
+    channel:ch,daangnType:dt,shippingStep:0,shippingFee:fee,notes:noteVal,
+    shippingDone:false,   // ★ 대기열에서 시작
+    paymentType:null      // 당근 직거래 선불/후불
+  });
+  // 당근 직거래=예약(취소 가능), 나머지=판매완료
+  inv.status = isDirect ? 'reserved' : 'sold';
   window.__safeSave();renderInv();fillSel();
   ['si','sp','spr','sch','snote','daangn-order'].forEach(x=>{const el=document.getElementById(x);if(el)el.value='';});
   document.getElementById('sfee').value='0';
@@ -1703,15 +1736,16 @@ function regSale(){
   document.getElementById('kream-hint').style.display='none';
   document.getElementById('combined-chk').checked=false;
   document.getElementById('combined-result').textContent='';
-  // 판매 완료 후 → 판매내역 탭으로 이동 + 오늘 날짜 필터 자동 적용
-  goTab('sale');
-  document.getElementById('sdf').value=new Date().toISOString().slice(0,10);
-  renderSales();
+  // 판매 등록 후 → 발송관리 대기열로 이동
+  goTab('ship');
+  document.getElementById('shf').value='pending';
+  renderShip();
 }
 
 function renderSales(){
   const df=v('sdf'),cf=v('scf');
-  let sl=S.sales.filter(s=>(!df||s.saleDate===df)&&(!cf||s.channel===cf)).sort((a,b)=>b.saleDate.localeCompare(a.saleDate));
+  // ★ 완료된 판매만 표시 (대기열 항목 제외)
+  let sl=S.sales.filter(s=>isShipDone(s)&&(!df||s.saleDate===df)&&(!cf||s.channel===cf)).sort((a,b)=>b.saleDate.localeCompare(a.saleDate));
   if(df){
     const tv=sl.reduce((a,s)=>a+s.salePrice,0);
     const pv=sl.reduce((a,s)=>a+(s.salePrice-s.purchasePrice-(s.shippingFee||0)),0);
@@ -1790,41 +1824,161 @@ function delSale(id){
 
 // 발송
 function renderShip(){
-  const flt=v('shf'),cf=v('shcf');
-  let sl=S.sales.filter(s=>{
-    const steps=STEPS[getSK(s)],done=s.shippingStep>=steps.length-1;
-    if(flt==='pending'&&done)return false;
-    if(flt==='done'&&!done)return false;
-    return !cf||s.channel===cf;
-  }).sort((a,b)=>b.saleDate.localeCompare(a.saleDate));
+  const flt=v('shf')||'pending', cf=v('shcf')||'';
   const cont=document.getElementById('shlist');
-  if(!sl.length){cont.innerHTML=`<div class="empty">해당 발송 내역이 없습니다</div>`;return;}
+
+  let sl=S.sales.filter(s=>{
+    const done=isShipDone(s);
+    if(flt==='pending'&&done) return false;
+    if(flt==='done'&&!done) return false;
+    const sk=getSK(s);
+    if(cf&&sk!==cf) return false;
+    return true;
+  }).sort((a,b)=>b.saleDate.localeCompare(a.saleDate));
+
+  if(!sl.length){
+    cont.innerHTML=`<div class="empty">${flt==='pending'?'대기열이 비어있습니다':'완료된 발송이 없습니다'}</div>`;
+    return;
+  }
+
+  const CH_LABEL={
+    daangn_direct:'🤝 당근 직거래',
+    daangn_instant:'⚡ 당근 바로구매',
+    daangn_delivery:'📦 당근 택배',
+    kream:'🛍️ 크림',
+    poison:'💚 포이즌'
+  };
+
   cont.innerHTML=sl.map(s=>{
-    const sk=getSK(s),steps=STEPS[sk],cur=s.shippingStep,done=cur>=steps.length-1;
+    const sk=getSK(s);
+    const steps=STEPS[sk]||[];
+    const cur=Math.min(s.shippingStep||0, steps.length-1);
+    const done=isShipDone(s);
+    const isDirect=sk==='daangn_direct';
+    const isLastStep=cur>=steps.length-1;
+
+    // 스텝 UI
     const stepsH=steps.map((lbl,i)=>{
       const dc=i<cur?'done':i===cur?'cur':'';
       const icon=i<cur?'✓':(i+1);
-      return`<span class="step-item"><span class="sdot2 ${dc}" onclick="setStep('${s.id}',${i})" title="${lbl}">${icon}</span><span class="slbl2 ${dc}">${lbl}</span>${i<steps.length-1?'<span class="sarr">›</span>':''}</span>`;
+      return`<span class="step-item">
+        <span class="sdot2 ${dc}" onclick="${done?'':'advanceToStep(\''+s.id+'\','+i+')'}" title="${lbl}">${icon}</span>
+        <span class="slbl2 ${dc}">${lbl}</span>
+        ${i<steps.length-1?'<span class="sarr">›</span>':''}
+      </span>`;
     }).join('');
+
+    // 액션 버튼 영역
+    let actionH='';
+    if(!done){
+      if(isDirect && cur===0){
+        // 예약 단계: 예약취소 버튼
+        actionH=`<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="sm" onclick="advanceShip('${s.id}')" style="border-color:var(--acc);color:var(--acc)">→ 준비로 이동</button>
+          <button class="sm danger" onclick="cancelReservation('${s.id}')">✕ 예약 취소</button>
+        </div>`;
+      } else if(isDirect && cur===2){
+        // 선불/후불 단계
+        const pt=s.paymentType;
+        actionH=`<div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <span style="font-size:12px;color:var(--tx2)">결제 방식:</span>
+          <button class="sm ${pt==='prepay'?'pr':''}" onclick="setPayType('${s.id}','prepay')">💳 선불</button>
+          <button class="sm ${pt==='postpay'?'pr':''}" onclick="setPayType('${s.id}','postpay')">🤝 후불</button>
+          ${pt?`<button class="sm" onclick="advanceShip('${s.id}')" style="border-color:var(--acc);color:var(--acc)">→ 거래완료로</button>`:''}
+        </div>`;
+      } else if(isLastStep){
+        // 마지막 단계: 완료 버튼
+        const lbl=isDirect?'✅ 거래 완료':'✅ 발송 완료';
+        actionH=`<div style="margin-top:10px">
+          <button class="pr" onclick="completeShip('${s.id}')">${lbl}</button>
+        </div>`;
+      } else {
+        // 일반 다음 단계 버튼
+        const nextLbl=steps[cur+1]||'다음';
+        actionH=`<div style="margin-top:10px">
+          <button class="sm" onclick="advanceShip('${s.id}')" style="border-color:var(--acc);color:var(--acc)">→ ${nextLbl}</button>
+        </div>`;
+      }
+    }
+
     const fee=s.shippingFee||0;
-    return`<div class="ship-card">
+    const payTag=s.paymentType==='prepay'?'<span class="bdg" style="background:rgba(96,165,250,.15);color:var(--blue);margin-left:4px">선불</span>':
+                 s.paymentType==='postpay'?'<span class="bdg" style="background:rgba(251,191,36,.15);color:var(--yellow);margin-left:4px">후불</span>':'';
+
+    return`<div class="ship-card" style="${done?'opacity:.65':''}">
       <div class="ship-top">
-        <div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
+            <span style="font-size:11px;color:var(--tx2)">${CH_LABEL[sk]||sk}</span>
+            <span class="bdg ${done?'bdg-done':'bdg-pending'}">${done?'✓ 완료':'진행중'}</span>
+            ${payTag}
+          </div>
           <div class="ship-name">${s.productName}${s.color?` <span style="font-weight:400;color:var(--tx2)">${s.color}</span>`:''} <span style="font-size:12px;color:var(--tx2)">${s.size}mm</span></div>
-          <div class="ship-meta">${fd(s.saleDate)} · ${won(s.salePrice)}${fee?` · 택배비 ${fee.toLocaleString()}원`:''} · ${chBdg(s.channel,s.daangnType)}</div>
-          ${s.notes?`<div style="margin-top:5px;font-size:12px;font-weight:500;color:var(--yellow)">📦 ${s.notes}</div>`:''}
+          <div class="ship-meta">${fd(s.saleDate)} · ${won(s.salePrice)}${fee?` · 택배비 ${fee.toLocaleString()}원`:''}</div>
+          ${s.notes?`<div style="margin-top:4px;font-size:12px;color:var(--yellow)">📦 ${s.notes}</div>`:''}
         </div>
-        <span class="bdg ${done?'bdg-done':'bdg-pending'}">${done?'✓ 완료':'진행중'}</span>
       </div>
-      <div class="steps">${stepsH}</div>
+      <div class="steps" style="margin-top:10px">${stepsH}</div>
+      ${actionH}
     </div>`;
   }).join('');
 }
-function setStep(id,i){
+
+function advanceToStep(id,i){
   const s=S.sales.find(x=>x.id===id);if(!s)return;
-  const steps=STEPS[getSK(s)];
-  s.shippingStep=s.shippingStep===i?Math.min(i+1,steps.length-1):Math.min(i,steps.length-1);
+  const sk=getSK(s),steps=STEPS[sk];
+  if(isShipDone(s))return;
+  // 선불/후불 단계 건너뛰기 방지
+  if(sk==='daangn_direct'&&i>=3&&!s.paymentType){
+    alert('선불 또는 후불을 선택해주세요.');return;
+  }
+  s.shippingStep=Math.min(i,steps.length-1);
   window.__safeSave();renderShip();
+}
+
+function advanceShip(id){
+  const s=S.sales.find(x=>x.id===id);if(!s)return;
+  const sk=getSK(s),steps=STEPS[sk];
+  if(isShipDone(s))return;
+  // 선불/후불 단계에서 결제방식 미선택 시 차단
+  if(sk==='daangn_direct'&&s.shippingStep===2&&!s.paymentType){
+    alert('선불 또는 후불을 선택해주세요.');return;
+  }
+  s.shippingStep=Math.min((s.shippingStep||0)+1, steps.length-1);
+  window.__safeSave();renderShip();
+}
+
+function setPayType(id,type){
+  const s=S.sales.find(x=>x.id===id);if(!s)return;
+  s.paymentType=s.paymentType===type?null:type; // 토글
+  window.__safeSave();renderShip();
+}
+
+function completeShip(id){
+  const s=S.sales.find(x=>x.id===id);if(!s)return;
+  const sk=getSK(s),steps=STEPS[sk];
+  if(sk==='daangn_direct'&&!s.paymentType){alert('선불 또는 후불을 선택해주세요.');return;}
+  if(!confirm(`거래를 완료 처리하시겠습니까?\n${s.productName}${s.color?' '+s.color:''} ${s.size}mm\n판매가: ${won(s.salePrice)}`))return;
+  s.shippingStep=steps.length-1;
+  s.shippingDone=true;
+  // 재고 상태 → sold로 확정
+  const inv=S.inventory.find(i=>i.id===s.inventoryId);
+  if(inv) inv.status='sold';
+  window.__safeSave();renderInv();renderShip();renderSales();
+}
+
+function cancelReservation(id){
+  const s=S.sales.find(x=>x.id===id);if(!s)return;
+  if(!confirm(`예약을 취소하시겠습니까?\n${s.productName}${s.color?' '+s.color:''} ${s.size}mm\n취소 시 재고가 복구됩니다.`))return;
+  // 재고 복구
+  const inv=S.inventory.find(i=>i.id===s.inventoryId);
+  if(inv&&inv.status==='reserved') inv.status='in_stock';
+  // deletedSales 기록
+  if(!S.deletedSales) S.deletedSales={};
+  S.deletedSales[saleKey(s)]=new Date().toISOString();
+  S.sales=S.sales.filter(x=>x.id!==id);
+  window.__safeSave();renderInv();fillSel();renderShip();
+  alert('예약이 취소되고 재고가 복구됐습니다.');
 }
 
 // 수익분석
@@ -1857,19 +2011,22 @@ function renderAna(){
   if(pf) anaPeriodFrom=pf;
   if(pt) anaPeriodTo=pt;
 
+  // ★ 완료된 판매만 집계 (대기열 항목 제외)
+  const doneSales=S.sales.filter(s=>isShipDone(s));
+
   // 기간 필터된 판매
-  const periodSales=S.sales.filter(s=>{
+  const periodSales=doneSales.filter(s=>{
     if(!anaPeriodFrom&&!anaPeriodTo) return true;
     if(anaPeriodFrom&&s.saleDate<anaPeriodFrom) return false;
     if(anaPeriodTo&&s.saleDate>anaPeriodTo) return false;
     return true;
   });
 
-  const ts=S.sales.filter(s=>s.saleDate===today);
-  const ms=S.sales.filter(s=>s.saleDate.startsWith(mo));
+  const ts=doneSales.filter(s=>s.saleDate===today);
+  const ms=doneSales.filter(s=>s.saleDate.startsWith(mo));
   const mP=ms.reduce((a,s)=>a+(s.salePrice-s.purchasePrice-(s.shippingFee||0)),0);
   const mR=ms.reduce((a,s)=>a+s.salePrice,0);
-  const tP=S.sales.reduce((a,s)=>a+(s.salePrice-s.purchasePrice-(s.shippingFee||0)),0);
+  const tP=doneSales.reduce((a,s)=>a+(s.salePrice-s.purchasePrice-(s.shippingFee||0)),0);
   const pP=periodSales.reduce((a,s)=>a+(s.salePrice-s.purchasePrice-(s.shippingFee||0)),0);
   const pR=periodSales.reduce((a,s)=>a+s.salePrice,0);
   const sv=S.inventory.filter(i=>i.status==='in_stock').reduce((a,i)=>a+i.purchasePrice,0);
@@ -1877,7 +2034,7 @@ function renderAna(){
 
   const days=[],dps=[];
   for(let i=29;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);days.push(d.toISOString().slice(0,10));}
-  days.forEach(d=>dps.push(S.sales.filter(s=>s.saleDate===d).reduce((a,s)=>a+(s.salePrice-s.purchasePrice-(s.shippingFee||0)),0)));
+  days.forEach(d=>dps.push(doneSales.filter(s=>s.saleDate===d).reduce((a,s)=>a+(s.salePrice-s.purchasePrice-(s.shippingFee||0)),0)));
 
   const cd={daangn:0,poison:0,kream:0};
   periodSales.forEach(s=>{cd[s.channel]=(cd[s.channel]||0)+(s.salePrice-s.purchasePrice-(s.shippingFee||0));});
