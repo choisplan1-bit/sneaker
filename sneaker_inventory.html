@@ -925,17 +925,22 @@ async function saveState(notify=true){
     return;
   }
 
-  // 저장 후 3초간 리스너 차단 (내 저장이 다시 onFirebaseData 트리거하는 것 방지)
-  setTimeout(()=>{ isSaving=false; },3000);
+  // 저장 후 8초간 리스너 차단
+  // Firebase가 저장된 데이터를 응답으로 보내는 시간 + 여유 확보
+  setTimeout(()=>{ isSaving=false; },8000);
 }
 
 function onFirebaseData(data){
   if(!data) return;
   if(isSaving) return;
 
+  // 기본 유효성 검사: 배열이 있어야 유효한 데이터
+  if(!Array.isArray(data.inventory) || !Array.isArray(data.sales)){
+    console.warn('Firebase 데이터 형식 오류 - 무시:', data);
+    return;
+  }
+
   // ★ Firebase = 단일 진실 소스. 로컬 항목을 Firebase에 절대 업로드하지 않음.
-  // "로컬에만 있는 항목 추가" 로직이 localStorage의 오래된 INIT 데이터를
-  // Firebase에 올려서 판매가 중복되는 원인이었음. 완전 제거.
   const fbData=normalizeState(data);
 
   // deletedSales: 로컬에서 삭제된 항목이 Firebase에서 다시 나타나지 않도록
@@ -971,14 +976,14 @@ function onFirebaseData(data){
   if(!fbInitialized) fbInitialized=true;
   setStat('실시간 연결 중','on');
 
-  // deletedSales에 새 삭제 내역이 있으면 Firebase에 반영 (다른 기기 동기화)
+  // deletedSales에 새 삭제 내역이 있으면 Firebase에 반영
   const fbDeleted=fbData.deletedSales||{};
   const hasNewDeleted=Object.keys(mergedDeleted).some(k=>!fbDeleted[k]);
   if(hasNewDeleted){
     isSaving=true;
     fbSaveDirect(S)
       .catch(()=>{})
-      .finally(()=>setTimeout(()=>{isSaving=false;},3000));
+      .finally(()=>setTimeout(()=>{isSaving=false;},8000));
   }
 }
 
@@ -1004,47 +1009,45 @@ window.addEventListener('fb-ready',()=>{
   if(window.__fbOK&&window.__fbListen){
     fbMode=true;
 
-    // 새 안정 저장소(v20)가 있으면 우선 사용, 없으면 기존 v3 로컬 데이터를 마이그레이션 후보로 표시
+    // 1) 앱 시작: localStorage에 데이터 있으면 즉시 화면 표시 (빠른 로딩)
     const local=lsLoad();
-    const legacyLocal=legacyLsLoad();
     if(hasUserData(local)){
       S=normalizeState(local);
       render();
-    }else if(hasUserData(legacyLocal)){
-      S=normalizeState(legacyLocal);
-      render();
-      setStat('기존 데이터 마이그레이션 준비','off');
     }
 
-    // Firebase 리스너 - 새 안정 저장소만 사용. 기존 v3는 최초 마이그레이션 때만 읽음.
+    // 2) Firebase 리스너 연결
+    // ★ 핵심 원칙: Firebase 리스너는 절대로 Firebase에 쓰지 않음
+    //   Firebase에 쓰는 것은 오직 saveState(사용자 액션) 하나뿐
+    //   Firebase null이 와도 로컬 업로드 금지 - 네트워크 불안정으로 잠깐 null이 올 수 있음
     window.__fbListen(data=>{
       if(!data){
-        const seed=hasUserData(local)?local:(hasUserData(legacyLocal)?legacyLocal:null);
-        if(seed){
-          isSaving=true;
-          const seeded=normalizeState(seed);
-          seeded.updatedAt=new Date().toISOString();
-          window.__fbSave(seeded)
-            .then(()=>{ S=seeded; lsSave(); fbInitialized=true; setStat('안정 저장소로 이전 완료','on'); })
-            .catch(()=>setStat('업로드 실패','off'))
-            .finally(()=>{ setTimeout(()=>{isSaving=false;},5000); });
-        }else if(window.__fbGetLegacy){
-          isSaving=true;
-          window.__fbGetLegacy()
-            .then(legacy=>{
-              if(hasUserData(legacy)){
-                const seeded=normalizeState(legacy);
-                seeded.updatedAt=new Date().toISOString();
-                return window.__fbSave(seeded).then(()=>{S=seeded;lsSave();render();setStat('기존 서버 데이터 이전 완료','on');});
-              }
-              setStat('새 저장소 준비됨','on');
-            })
-            .catch(()=>setStat('기존 데이터 확인 실패','off'))
-            .finally(()=>{ fbInitialized=true; setTimeout(()=>{isSaving=false;},5000); });
+        // Firebase가 null = 네트워크 끊김 또는 데이터 없음
+        // fbInitialized된 후에는 무시 (네트워크 복구 후 다시 데이터가 올 것)
+        // 최초 연결 시 Firebase가 비어있는 경우만 초기 업로드
+        if(!fbInitialized){
+          const startLocal=lsLoad();
+          if(hasUserData(startLocal)){
+            // Firebase가 비어있고 로컬에 데이터 있음 → 한 번만 업로드
+            isSaving=true;
+            const seed=normalizeState(startLocal);
+            seed.updatedAt=new Date().toISOString();
+            window.__fbSave(seed)
+              .then(()=>{ S=seed; lsSave(); fbInitialized=true; setStat('데이터 동기화 완료 ✓','on'); })
+              .catch(()=>setStat('업로드 실패 - 재시도 필요','off'))
+              .finally(()=>setTimeout(()=>{isSaving=false;},5000));
+          } else {
+            // 로컬도 비어있음 → 완전 새 사용자, Firebase도 비어있음, 정상
+            fbInitialized=true;
+            setStat('준비됨','on');
+          }
         }
+        // fbInitialized 이후 null → 무시 (네트워크 불안정)
+        setStat('연결 끊김 - 재연결 중...','off');
         return;
       }
-      // ★ Firebase 데이터 도착 시 중복 재고 자동 정리 후 저장
+
+      // Firebase에 데이터 있음 → Firebase가 유일한 진실
       onFirebaseData(data);
     });
 
@@ -1052,27 +1055,13 @@ window.addEventListener('fb-ready',()=>{
   }else{
     // Firebase 연결 안 됨 → 로컬만 사용
     const local=lsLoad();
-    if(local&&local.inventory&&local.inventory.length){
-      S=local;
-    }else{
-      S=mkInitData();
-      lsSave();
+    if(hasUserData(local)){
+      S=normalizeState(local);
     }
     render();
     setStat('로컬 모드 (오프라인)','off');
   }
 });
-
-// 5초 후에도 데이터 없으면 로컬에서 복구
-setTimeout(()=>{
-  if(!S.inventory||!S.inventory.length){
-    const local=lsLoad();
-    if(local&&local.inventory&&local.inventory.length){
-      S=local;render();
-      setStat('로컬 복구됨','off');
-    }
-  }
-},5000);
 
 const TABS=['inv','sale','ship','ana','cfg'];
 
