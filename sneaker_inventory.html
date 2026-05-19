@@ -474,9 +474,9 @@ button.sell-btn:hover{background:var(--acc);color:#000}
 
 <script>
 const STEPS={
-  kream:           ['발송 준비','택배 예약','택배 발송','크림 입고','검수 통과','완료'],
-  poison:          ['발송 준비','택배 예약','택배 발송','포이즌 입고','검수 통과','완료'],
-  daangn_delivery: ['발송 준비','택배 예약','택배 발송','구매자 수령','완료'],
+  kream:           ['발송 준비','택배 예약','포장 완료','택배 발송','크림 입고','검수 통과','완료'],
+  poison:          ['발송 준비','택배 예약','포장 완료','택배 발송','포이즌 입고','검수 통과','완료'],
+  daangn_delivery: ['발송 준비','포장 완료','택배 예약','택배 발송','구매자 수령','완료'],
   daangn_direct:   ['예약','준비','선불/후불','거래 완료'],
   daangn_instant:  ['발송 준비','수거 완료','거래 완료'],
 };
@@ -1883,7 +1883,8 @@ function renderShip(){
     let actionH='';
     if(!done){
       // 당근 직거래: 모든 단계에 예약취소 버튼 표시 (거래완료 전까지)
-      const cancelBtn=isDirect?`<button class="sm danger" onclick="cancelReservation('${s.id}')" style="margin-left:auto">✕ 예약 취소</button>`:'';
+      // ★ 모든 채널 - 완료 전까지 취소 버튼 표시 (검수 불합격 등 대비)
+      const cancelBtn=`<button class="sm danger" onclick="cancelReservation('${s.id}')" style="margin-left:auto">✕ 취소</button>`;
 
       if(isDirect && cur===0){
         actionH=`<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
