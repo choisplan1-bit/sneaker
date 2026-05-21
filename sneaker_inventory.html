@@ -291,8 +291,9 @@ button.sell-btn:hover{background:var(--acc);color:#000}
   <div class="sh">
     <span class="sh-title">발송 현황</span>
     <div class="frow" style="margin:0;gap:6px">
-      <select id="shf" onchange="renderShip()" style="width:110px;flex:none">
+      <select id="shf" onchange="renderShip()" style="width:130px;flex:none">
         <option value="pending">대기열</option>
+        <option value="ship_today">📦 오늘 발송할 것</option>
         <option value="done">완료</option>
         <option value="all">전체</option>
       </select>
@@ -1844,15 +1845,31 @@ function renderShip(){
 
   let sl=S.sales.filter(s=>{
     const done=isShipDone(s);
+    const sk=getSK(s);
+    const steps=STEPS[sk]||[];
+    const cur=s.shippingStep||0;
+    const curLabel=steps[cur]||'';
+
     if(flt==='pending'&&done) return false;
     if(flt==='done'&&!done) return false;
-    const sk=getSK(s);
+    if(flt==='ship_today'){
+      // 오늘 발송할 것 = 대기 중이면서 택배를 실제로 보내야 하는 상태
+      // 1) 듀얼 체크박스 단계에서 둘 다 체크된 것 (포장+예약 완료, 발송 대기)
+      // 2) 현재 스텝이 "택배 발송" 단계인 것
+      if(done) return false;
+      const dualReady=isDualStep(curLabel)&&s.dualA===true&&s.dualB===true;
+      const atShipStep=curLabel.includes('택배 발송');
+      return dualReady||atShipStep;
+    }
     if(cf&&sk!==cf) return false;
     return true;
   }).sort((a,b)=>b.saleDate.localeCompare(a.saleDate));
 
   if(!sl.length){
-    cont.innerHTML=`<div class="empty">${flt==='pending'?'대기열이 비어있습니다':'완료된 발송이 없습니다'}</div>`;
+    const msg=flt==='pending'?'대기열이 비어있습니다'
+             :flt==='ship_today'?'📦 오늘 발송할 택배가 없습니다'
+             :'완료된 발송이 없습니다';
+    cont.innerHTML=`<div class="empty">${msg}</div>`;
     return;
   }
 
