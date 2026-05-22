@@ -1771,10 +1771,9 @@ function regSale(){
 
 function renderSales(){
   const df=v('sdf'),cf=v('scf');
-  // 전체 판매 표시 (대기 포함), 완료된 것 먼저 정렬
+  // 대기 위, 완료 아래 → 같은 그룹 안에서 날짜 최신순
   let sl=S.sales.filter(s=>(!df||s.saleDate===df)&&(!cf||s.channel===cf))
     .sort((a,b)=>{
-      // 대기 위, 완료 아래 (같은 날짜 내에서)
       if(isShipDone(a)!==isShipDone(b)) return isShipDone(a)?1:-1;
       return b.saleDate.localeCompare(a.saleDate);
     });
@@ -1863,13 +1862,10 @@ function renderShip(){
     if(flt==='pending'&&done) return false;
     if(flt==='done'&&!done) return false;
     if(flt==='ship_today'){
-      // 오늘 발송할 것 = 대기 중이면서 택배를 실제로 보내야 하는 상태
-      // 1) 듀얼 체크박스 단계에서 둘 다 체크된 것 (포장+예약 완료, 발송 대기)
-      // 2) 현재 스텝이 "택배 발송" 단계인 것
+      // 오늘 발송할 것 = 포장완료+택배예약 체크박스 둘 다 완료된 것 (아직 택배 발송 안 한 것)
       if(done) return false;
       const dualReady=isDualStep(curLabel)&&s.dualA===true&&s.dualB===true;
-      const atShipStep=curLabel.includes('택배 발송');
-      return dualReady||atShipStep;
+      return dualReady;
     }
     if(cf&&sk!==cf) return false;
     return true;
