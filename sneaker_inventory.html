@@ -1884,10 +1884,15 @@ function renderShip(){
     }
     const CH_LABEL={daangn_direct:'🤝 당근 직거래',daangn_instant:'⚡ 당근 바로구매',daangn_delivery:'📦 당근 택배',kream:'🛍️ 크림',poison:'💚 포이즌'};
     const renderCards=(list)=>list.map(s=>buildShipCard(s,CH_LABEL)).join('');
-    cont.innerHTML=
-      (todo.length?`<div style="font-size:12px;font-weight:600;color:var(--acc);padding:6px 2px 10px;border-bottom:1px solid var(--bd);margin-bottom:12px">📋 오늘 거래/발송 예정 (${todo.length}건)</div>${renderCards(todo)}`:'')
-      +(inProgress.length?`<div style="font-size:12px;font-weight:600;color:var(--tx2);padding:${todo.length?'20px':'6px'} 2px 10px;border-bottom:1px solid var(--bd);margin-bottom:12px">📦 발송 완료 / 진행중 (${inProgress.length}건)</div>${renderCards(inProgress)}`:'');
-    return;
+    const todoSection=todo.length
+      ? '<div style="font-size:12px;font-weight:600;color:var(--acc);padding:6px 2px 10px;border-bottom:1px solid var(--bd);margin-bottom:12px">📋 오늘 거래/발송 예정 ('+todo.length+'건)</div>'+renderCards(todo)
+      : '';
+    const progressPad=todo.length?'20px':'6px';
+    const progressSection=inProgress.length
+      ? '<div style="font-size:12px;font-weight:600;color:var(--tx2);padding:'+progressPad+' 2px 10px;border-bottom:1px solid var(--bd);margin-bottom:12px">📦 발송 완료 / 진행중 ('+inProgress.length+'건)</div>'+renderCards(inProgress)
+      : '';
+    cont.innerHTML=todoSection+progressSection;
+        return;
   }
 
   sl.sort((a,b)=>b.saleDate.localeCompare(a.saleDate));
