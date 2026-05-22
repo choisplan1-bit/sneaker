@@ -1737,19 +1737,17 @@ function regSale(){
   const inv=S.inventory.find(i=>i.id===iid);
   if(!inv){alert('재고를 찾을 수 없습니다');return;}
   const dt=ch==='daangn'?(v('sdt')||'delivery'):null;
+  const isDirect=ch==='daangn'&&dt==='direct';
   const fee=+v('sfee')||0;
   const orderNum=v('daangn-order');
   const noteVal=[orderNum,v('snote')].filter(Boolean).join(' / ');
-  // 당근 직거래=예약(취소 가능), 나머지=판매 즉시 완료
-  // 발송관리는 배송 트래킹용으로만 사용
-  const steps=STEPS[getSK({channel:ch,daangnType:dt})]||[];
-  inv.status = isDirect ? 'reserved' : 'sold';
+  inv.status=isDirect?'reserved':'sold';
   const sale={
     id:gid(),inventoryId:iid,
     productName:inv.productName,color:inv.color,size:inv.size,
     purchasePrice:inv.purchasePrice,saleDate:d,salePrice:sp,
     channel:ch,daangnType:dt,shippingStep:0,shippingFee:fee,notes:noteVal,
-    shippingDone:isDirect?false:false, // 발송관리 대기
+    shippingDone:false,
     paymentType:null
   };
   S.sales.unshift(sale);
