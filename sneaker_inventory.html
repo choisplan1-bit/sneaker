@@ -1847,34 +1847,55 @@ function delSale(id){
   window.__safeSave();renderInv();renderSales();renderShip();fillSel();
 }
 
+// 아이템이 "오늘 할 일" 그룹인지 판단
+function isTodayTodo(s){
+  const sk=getSK(s);
+  const steps=STEPS[sk]||[];
+  const cur=s.shippingStep||0;
+  if(sk==='daangn_direct') return cur < steps.length-1; // 거래완료 전
+  const shipIdx=steps.findIndex(step=>step==='택배 발송');
+  if(shipIdx!==-1) return cur < shipIdx; // 택배 발송 전
+  const dualIdx=steps.findIndex(step=>isDualStep(step));
+  return dualIdx!==-1 && cur<=dualIdx;
+}
+
 // 발송
 function renderShip(){
   const flt=v('shf')||'pending', cf=v('shcf')||'';
   const cont=document.getElementById('shlist');
 
+  // ship_today: 완료 안 된 전체 표시 (채널 필터 적용)
   let sl=S.sales.filter(s=>{
     const done=isShipDone(s);
     const sk=getSK(s);
-    const steps=STEPS[sk]||[];
-    const cur=s.shippingStep||0;
-    const curLabel=steps[cur]||'';
-
     if(flt==='pending'&&done) return false;
     if(flt==='done'&&!done) return false;
-    if(flt==='ship_today'){
-      // 오늘 발송할 것 = 포장완료+택배예약 체크박스 둘 다 완료된 것 (아직 택배 발송 안 한 것)
-      if(done) return false;
-      const dualReady=isDualStep(curLabel)&&s.dualA===true&&s.dualB===true;
-      return dualReady;
-    }
+    if(flt==='ship_today'&&done) return false;
     if(cf&&sk!==cf) return false;
     return true;
-  }).sort((a,b)=>b.saleDate.localeCompare(a.saleDate));
+  });
+
+  if(flt==='ship_today'){
+    // 두 그룹으로 렌더링
+    const todo=sl.filter(s=>isTodayTodo(s)).sort((a,b)=>b.saleDate.localeCompare(a.saleDate));
+    const inProgress=sl.filter(s=>!isTodayTodo(s)).sort((a,b)=>b.saleDate.localeCompare(a.saleDate));
+
+    if(!todo.length&&!inProgress.length){
+      cont.innerHTML=`<div class="empty">📋 오늘 거래/발송 예정이 없습니다</div>`;
+      return;
+    }
+    const CH_LABEL={daangn_direct:'🤝 당근 직거래',daangn_instant:'⚡ 당근 바로구매',daangn_delivery:'📦 당근 택배',kream:'🛍️ 크림',poison:'💚 포이즌'};
+    const renderCards=(list)=>list.map(s=>buildShipCard(s,CH_LABEL)).join('');
+    cont.innerHTML=
+      (todo.length?`<div style="font-size:12px;font-weight:600;color:var(--acc);padding:6px 2px 10px;border-bottom:1px solid var(--bd);margin-bottom:12px">📋 오늘 거래/발송 예정 (${todo.length}건)</div>${renderCards(todo)}`:'')
+      +(inProgress.length?`<div style="font-size:12px;font-weight:600;color:var(--tx2);padding:${todo.length?'20px':'6px'} 2px 10px;border-bottom:1px solid var(--bd);margin-bottom:12px">📦 발송 완료 / 진행중 (${inProgress.length}건)</div>${renderCards(inProgress)}`:'');
+    return;
+  }
+
+  sl.sort((a,b)=>b.saleDate.localeCompare(a.saleDate));
 
   if(!sl.length){
-    const msg=flt==='pending'?'대기열이 비어있습니다'
-             :flt==='ship_today'?'📦 오늘 발송할 택배가 없습니다'
-             :'완료된 발송이 없습니다';
+    const msg=flt==='pending'?'대기열이 비어있습니다':'완료된 발송이 없습니다';
     cont.innerHTML=`<div class="empty">${msg}</div>`;
     return;
   }
@@ -1887,7 +1908,10 @@ function renderShip(){
     poison:'💚 포이즌'
   };
 
-  cont.innerHTML=sl.map(s=>{
+  cont.innerHTML=sl.map(s=>buildShipCard(s,CH_LABEL)).join('');
+}
+
+function buildShipCard(s,CH_LABEL){
     const sk=getSK(s);
     const steps=STEPS[sk]||[];
     const cur=Math.min(s.shippingStep||0, steps.length-1);
@@ -2001,7 +2025,6 @@ function renderShip(){
       ${dualH}
       ${actionH}
     </div>`;
-  }).join('');
 }
 
 
