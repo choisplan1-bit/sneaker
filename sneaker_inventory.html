@@ -330,6 +330,15 @@ button.sell-btn:hover{background:var(--acc);color:#000}
       <span id="backup-stat" style="font-size:12px;color:var(--tx2)"></span>
     </div>
 
+    <div style="font-size:12px;color:var(--tx2);margin-bottom:8px;font-weight:500">🚨 긴급 복구</div>
+    <div style="background:var(--bg3);border:1px solid var(--bd2);border-radius:var(--rs);padding:14px;margin-bottom:16px">
+      <div style="font-size:12px;color:var(--tx2);margin-bottom:10px">발송관리를 거치지 않고 "대기" 상태로 남은 판매를 일괄 완료 처리합니다.<br>당근 직거래는 포함되지 않습니다 (예약 취소 가능성 있음).</div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <button onclick="batchComplete()" style="border-color:var(--acc);color:var(--acc);font-weight:600">✅ 대기 판매 일괄 완료 처리</button>
+        <span id="batch-stat" style="font-size:12px;color:var(--tx2)"></span>
+      </div>
+    </div>
+
     <div style="font-size:12px;color:var(--tx2);margin-bottom:8px;font-weight:500">📤 복원</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
       <button onclick="document.getElementById('restore-file').click()">⬆️ JSON 파일로 복원</button>
@@ -894,12 +903,18 @@ function rememberBackup(label,data){
   }catch(e){}
 }
 async function fbSaveDirect(state){
-  // ★ 저장 시 Firebase 재읽기/재병합 절대 금지
-  // 저장 전에 Firebase를 읽어서 merge하면 로컬 타임스탬프 비교 오류로 데이터가 덮어써짐
-  state.updatedAt=new Date().toISOString();
+  // ★ deletedSales는 Firebase에 저장하지 않음
+  // deletedSales가 Firebase에 저장되면 다른 기기에서 읽어서
+  // 멀쩡한 판매를 지우는 버그 발생
+  const toSave={
+    inventory:state.inventory,
+    sales:state.sales,
+    cfg:state.cfg,
+    updatedAt:new Date().toISOString()
+  };
   lsSave();
   rememberBackup('save',state);
-  await window.__fbSave(state);
+  await window.__fbSave(toSave);
 }
 function setStat(msg,mode){
   document.getElementById('stxt').textContent=msg+' · '+new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
@@ -951,28 +966,20 @@ function onFirebaseData(data){
   if(!data) return;
   if(isSaving) return;
 
-  // 기본 유효성 검사: 배열이 있어야 유효한 데이터
   if(!Array.isArray(data.inventory) || !Array.isArray(data.sales)){
-    console.warn('Firebase 데이터 형식 오류 - 무시:', data);
+    console.warn('Firebase 데이터 형식 오류 - 무시');
     return;
   }
 
-  // ★ Firebase = 단일 진실 소스. 로컬 항목을 Firebase에 절대 업로드하지 않음.
+  // ★ Firebase = 절대 진실. 어떤 로컬 데이터도 Firebase를 이기지 않음.
+  // deletedSales 병합 완전 제거: 로컬 deletedSales가 Firebase 판매를 지우는 버그 수정
   const fbData=normalizeState(data);
 
-  // deletedSales: 로컬에서 삭제된 항목이 Firebase에서 다시 나타나지 않도록
-  const mergedDeleted=pruneDeletedSales({
-    ...(S.deletedSales||{}),
-    ...(fbData.deletedSales||{})
-  });
-  const deletedIds=new Set(Object.keys(mergedDeleted));
-
-  // 판매: Firebase 기준, 삭제된 것만 제외
-  const sales=fbData.sales.filter(s=>s&&s.id&&!deletedIds.has(saleKey(s)));
+  // 판매: Firebase에 있는 것 그대로 사용 (deletedSales 필터링 제거)
+  const sales=fbData.sales.filter(s=>s&&s.id);
 
   // 재고 상태: 활성 판매 기준으로 조정
   const soldByInvId=new Set(sales.map(s=>s.inventoryId).filter(Boolean));
-  // 예약중 판매 (daangn_direct, shippingDone=false, step<last)
   const reservedByInvId=new Set(
     sales.filter(s=>getSK(s)==='daangn_direct'&&!isShipDone(s))
          .map(s=>s.inventoryId).filter(Boolean)
@@ -987,7 +994,7 @@ function onFirebaseData(data){
   const next={
     inventory,
     sales,
-    deletedSales:mergedDeleted,
+    deletedSales:{},  // deletedSales는 로컬에서만 관리, Firebase와 병합 안 함
     cfg:{...(fbData.cfg||{})},
     updatedAt:fbData.updatedAt
   };
@@ -998,16 +1005,6 @@ function onFirebaseData(data){
   if(changed){ lsSave(); render(); }
   if(!fbInitialized) fbInitialized=true;
   setStat('실시간 연결 중','on');
-
-  // deletedSales에 새 삭제 내역이 있으면 Firebase에 반영
-  const fbDeleted=fbData.deletedSales||{};
-  const hasNewDeleted=Object.keys(mergedDeleted).some(k=>!fbDeleted[k]);
-  if(hasNewDeleted){
-    isSaving=true;
-    fbSaveDirect(S)
-      .catch(()=>{})
-      .finally(()=>setTimeout(()=>{isSaving=false;},8000));
-  }
 }
 
 async function manualSync(){
@@ -1456,6 +1453,29 @@ function exportExcel(){
 // ===== 백업 / 복원 =====
 // ★ 판매 중복 제거: 완전히 동일한 id를 가진 판매만 제거 (안전)
 // 같은 제품을 2번 판매했어도 id가 다르면 건드리지 않음
+function batchComplete(){
+  const pending=S.sales.filter(s=>!isShipDone(s)&&getSK(s)!=='daangn_direct');
+  if(!pending.length){
+    alert('당근 직거래 제외, 대기 중인 판매가 없습니다.');return;
+  }
+  if(!confirm(`대기 중인 판매 ${pending.length}건을 모두 완료 처리하시겠습니까?\n(당근 직거래 제외)\n\n이 작업은 발송관리 단계를 건너뛰고 즉시 완료 처리합니다.`))return;
+
+  pending.forEach(s=>{
+    const sk=getSK(s);
+    const steps=STEPS[sk]||[];
+    s.shippingStep=steps.length-1;
+    s.shippingDone=true;
+    // 재고 상태도 sold로 확정
+    const inv=S.inventory.find(i=>i.id===s.inventoryId);
+    if(inv&&inv.status!=='sold') inv.status='sold';
+  });
+
+  window.__safeSave();renderSales();renderShip();renderInv();
+  const el=document.getElementById('batch-stat');
+  if(el) el.textContent=`✅ ${pending.length}건 완료 처리됨`;
+  alert(`✅ ${pending.length}건이 완료 처리됐습니다.\n판매내역에서 확인하세요.`);
+}
+
 function removeDupSales(){
   const before=S.sales.length;
   const seen=new Map();
@@ -1720,17 +1740,19 @@ function regSale(){
   const fee=+v('sfee')||0;
   const orderNum=v('daangn-order');
   const noteVal=[orderNum,v('snote')].filter(Boolean).join(' / ');
-  const isDirect=ch==='daangn'&&dt==='direct';
-  S.sales.unshift({
+  // 당근 직거래=예약(취소 가능), 나머지=판매 즉시 완료
+  // 발송관리는 배송 트래킹용으로만 사용
+  const steps=STEPS[getSK({channel:ch,daangnType:dt})]||[];
+  inv.status = isDirect ? 'reserved' : 'sold';
+  const sale={
     id:gid(),inventoryId:iid,
     productName:inv.productName,color:inv.color,size:inv.size,
     purchasePrice:inv.purchasePrice,saleDate:d,salePrice:sp,
     channel:ch,daangnType:dt,shippingStep:0,shippingFee:fee,notes:noteVal,
-    shippingDone:false,   // ★ 대기열에서 시작
-    paymentType:null      // 당근 직거래 선불/후불
-  });
-  // 당근 직거래=예약(취소 가능), 나머지=판매완료
-  inv.status = isDirect ? 'reserved' : 'sold';
+    shippingDone:isDirect?false:false, // 발송관리 대기
+    paymentType:null
+  };
+  S.sales.unshift(sale);
   window.__safeSave();renderInv();fillSel();
   ['si','sp','spr','sch','snote','daangn-order'].forEach(x=>{const el=document.getElementById(x);if(el)el.value='';});
   document.getElementById('sfee').value='0';
@@ -1805,37 +1827,25 @@ function delSale(id){
   );
   if(!isConfirmed)return;
 
-  // ★ 재고 복구 - 새 항목 추가는 절대 하지 않음 (중복 원인)
-  // mergeStates가 판매 없는 'sold' 항목을 자동으로 in_stock으로 복구함
+  // 재고 복구
   let restored=false;
-
-  // 1단계: inventoryId로 직접 찾기
   if(sale.inventoryId){
     const inv=S.inventory.find(i=>i.id===sale.inventoryId);
     if(inv){ inv.status='in_stock'; restored=true; }
   }
-  // 2단계: 못 찾으면 제품명+색상+사이즈로 sold 항목 찾기 (1개만)
   if(!restored){
     const inv=S.inventory.find(i=>
       i.productName===sale.productName &&
       (i.color||'')===(sale.color||'') &&
       i.size===sale.size &&
-      i.status==='sold'
+      (i.status==='sold'||i.status==='reserved')
     );
     if(inv){ inv.status='in_stock'; restored=true; }
   }
-  // ★ 못 찾아도 새 항목 추가하지 않음
-  // mergeStates의 자동 복구 로직이 처리함 (없으면 이미 in_stock 상태)
 
-  // deletedSales 기록으로 재출현 방지
-  if(!S.deletedSales||typeof S.deletedSales!=='object') S.deletedSales={};
-  S.deletedSales[saleKey(sale)]=new Date().toISOString();
-
-  // ★ id로 정확히 1건만 삭제 (saleKey 사용 시 여러 건 삭제될 수 있음)
+  // ★ id로만 삭제. deletedSales 기록 제거 (Firebase 판매 오삭제 버그 원인)
   S.sales=S.sales.filter(s=>s.id!==id);
-
   window.__safeSave();renderInv();renderSales();renderShip();fillSel();
-  alert('✅ 판매 내역이 삭제됐습니다.' + (restored?'\n재고가 복구됐습니다.':'\n재고는 자동으로 재고중으로 표시됩니다.'));
 }
 
 // 발송
@@ -2056,9 +2066,7 @@ function cancelReservation(id){
   // 재고 복구
   const inv=S.inventory.find(i=>i.id===s.inventoryId);
   if(inv&&(inv.status==='reserved'||inv.status==='sold')) inv.status='in_stock';
-  // deletedSales 기록
-  if(!S.deletedSales) S.deletedSales={};
-  S.deletedSales[saleKey(s)]=new Date().toISOString();
+  // ★ id로만 삭제. deletedSales 기록 제거
   S.sales=S.sales.filter(x=>x.id!==id);
   window.__safeSave();renderInv();fillSel();renderShip();renderSales();
   alert(`${label}이 취소되고 재고가 복구됐습니다.`);
