@@ -942,9 +942,16 @@ async function saveState(notify=true){
     return;
   }
 
-  // 저장 후 8초간 리스너 차단
-  // Firebase가 저장된 데이터를 응답으로 보내는 시간 + 여유 확보
-  setTimeout(()=>{ isSaving=false; },8000);
+  // 저장 후 Firebase에서 최신 데이터 다시 확인 (다른 기기 업데이트 반영)
+  setTimeout(()=>{
+    isSaving=false;
+    // 저장 중 놓쳤을 수 있는 다른 기기의 업데이트를 가져옴
+    if(window.__fbGet){
+      window.__fbGet().then(data=>{
+        if(data) onFirebaseData(data);
+      }).catch(()=>{});
+    }
+  },3000);
 }
 
 function onFirebaseData(data){
@@ -996,16 +1003,20 @@ function onFirebaseData(data){
 }
 
 async function manualSync(){
-  // ★ 수동 동기화 = Firebase에서 최신 데이터 내려받기 (업로드 금지)
-  // 로컬을 Firebase에 올리면 오래된 데이터로 덮어쓰는 사고 발생
   setStat('동기화 중...','off');
-  if(fbMode&&window.__fbListen){
-    setStat('Firebase에서 최신 데이터 확인 중...','off');
-    // Firebase 리스너가 이미 붙어있으므로 현재 상태를 강제로 받아옴
-    // isSaving을 잠깐 false로 만들어서 다음 Firebase 이벤트를 받도록 함
-    const was=isSaving;
-    isSaving=false;
-    setStat('동기화 완료 ✓ (Firebase 기준)','on');
+  if(fbMode&&window.__fbGet){
+    try{
+      isSaving=false; // 차단 해제
+      const data=await window.__fbGet();
+      if(data){
+        onFirebaseData(data);
+        setStat('동기화 완료 ✓','on');
+      }else{
+        setStat('Firebase 데이터 없음','off');
+      }
+    }catch(e){
+      setStat('동기화 실패 - 연결 확인','off');
+    }
   }else{
     const d=lsLoad();if(d){S=d;}render();setStat('로컬 동기화됨','off');
   }
