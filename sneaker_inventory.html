@@ -419,7 +419,7 @@ button.sell-btn:hover{background:var(--acc);color:#000}
         <label class="flbl">제품명 * <span style="color:var(--tx3);font-weight:400">— 기존 제품 선택 또는 직접 입력</span></label>
         <div style="display:flex;gap:6px">
           <div style="position:relative;flex:1">
-            <input type="text" id="in_" placeholder="제품명 검색 또는 직접 입력" oninput="onProductInput()" onfocus="onProductInput()" autocomplete="off">
+            <input type="text" id="in_" placeholder="제품명·품번 검색 또는 직접 입력" oninput="onProductInput()" onfocus="onProductInput()" autocomplete="off">
             <div id="ac-list" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg3);border:1px solid var(--acc);border-top:none;border-radius:0 0 var(--rs) var(--rs);z-index:200;max-height:180px;overflow-y:auto"></div>
           </div>
           <button type="button" onclick="toggleProductDrop()" style="flex-shrink:0;padding:8px 10px" title="전체 제품 목록">▾</button>
@@ -1259,9 +1259,17 @@ function addItem(){
 // ===== 제품명 자동완성 =====
 function getProductNames(){
   const names=new Map(); // name → {sku, color, pp} 최근 것
-  [...S.inventory,...S.sales].forEach(i=>{
+  [...S.inventory,...S.sales,...(S.returns||[])].forEach(i=>{
     const nm=i.productName;
-    if(nm&&!names.has(nm)) names.set(nm,{sku:i.sku||'',color:i.color||'',pp:i.purchasePrice||0});
+    if(!nm) return;
+    if(!names.has(nm)){
+      names.set(nm,{sku:i.sku||'',color:i.color||'',pp:i.purchasePrice||0});
+    }else{
+      const cur=names.get(nm);
+      if(!cur.sku&&i.sku) cur.sku=i.sku;
+      if(!cur.color&&i.color) cur.color=i.color;
+      if(!cur.pp&&i.purchasePrice) cur.pp=i.purchasePrice;
+    }
   });
   return [...names.entries()].map(([name,info])=>({name,...info})).sort((a,b)=>a.name.localeCompare(b.name,'ko'));
 }
@@ -1269,7 +1277,7 @@ function getProductNames(){
 function onProductInput(){
   const q=v('in_').toLowerCase();
   const all=getProductNames();
-  const filtered=q?all.filter(p=>p.name.toLowerCase().includes(q)):all;
+  const filtered=q?all.filter(p=>(p.name+' '+(p.sku||'')+' '+(p.color||'')).toLowerCase().includes(q)):all;
   showAcList(filtered,q);
   updateAddPreview();
 }
@@ -1294,7 +1302,7 @@ function showAcList(items,q){
       ${p.sku?`<span style="color:var(--tx3);margin-left:6px">${p.sku}</span>`:''}
       ${p.color?`<span style="color:var(--tx2);margin-left:6px">${p.color}</span>`:''}
     </div>`).join('');
-  const newRow=q&&!items.find(p=>p.name.toLowerCase()===q)?
+  const newRow=q&&!items.length?
     `<div onclick="selectProduct('${q.replace(/'/g,"\\'")}','','',0)"
       style="padding:8px 12px;cursor:pointer;font-size:12px;color:var(--acc);border-top:1px solid var(--bd)"
       onmouseover="this.style.background='var(--bg4)'" onmouseout="this.style.background=''">
