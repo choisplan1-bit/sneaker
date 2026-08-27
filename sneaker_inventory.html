@@ -95,6 +95,12 @@ tbody tr:hover td{background:rgba(255,255,255,.02)}
 .ship-fee-box{background:var(--bg3);border:1px solid var(--bd2);border-radius:var(--rs);padding:10px 12px;margin-top:8px}
 .ship-fee-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .ship-fee-row label{font-size:12px;color:var(--tx2);white-space:nowrap}
+.size-grid{display:grid;grid-template-columns:1fr 80px 32px;gap:6px;align-items:center;margin-top:8px}
+.size-grid input{padding:7px 9px}
+.size-grid-head{font-size:11px;color:var(--tx2);font-weight:500}
+.link-btn{border:none;background:none;color:var(--acc);padding:4px 0;font-size:12px}
+.link-btn:hover{background:transparent;color:var(--tx)}
+.action-cell{display:flex;gap:6px;flex-wrap:wrap}
 .ship-card{background:var(--bg2);border:1px solid var(--bd);border-radius:var(--r);padding:14px 16px;margin-bottom:10px}
 .ship-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;gap:10px}
 .ship-name{font-size:13px;font-weight:500}.ship-meta{font-size:11px;color:var(--tx2);margin-top:3px}
@@ -212,6 +218,17 @@ button.sell-btn:hover{background:var(--acc);color:#000}
     </tr></thead>
     <tbody id="ibody"></tbody>
   </table></div>
+
+  <div class="sh mt20">
+    <span class="sh-title">반품 목록</span>
+    <span id="return-summary" style="font-size:12px;color:var(--tx2);margin-left:auto"></span>
+  </div>
+  <div class="tw"><table>
+    <thead><tr>
+      <th>반품일</th><th>제품명</th><th>색상</th><th>사이즈</th><th>매입가</th><th class="hide-mobile">품번</th><th class="hide-mobile">사유</th>
+    </tr></thead>
+    <tbody id="return-body"></tbody>
+  </table></div>
 </div>
 
 <!-- 판매등록 -->
@@ -248,7 +265,7 @@ button.sell-btn:hover{background:var(--acc);color:#000}
       <div class="fgrp span2" id="ship-fee-section">
         <label class="flbl">택배비 (원) <span style="color:var(--tx3);font-size:10px">— 순이익에서 차감됨</span></label>
         <input type="number" id="sfee" placeholder="0" oninput="calcProfit()" value="0">
-        <!-- 포이즌 합배송 -->
+        <!-- 포이즌/크림 합배송 -->
         <div class="ship-fee-box hidden" id="poison-box">
           <div class="ship-fee-row">
             <input type="checkbox" id="combined-chk" onchange="onCombined()">
@@ -260,7 +277,7 @@ button.sell-btn:hover{background:var(--acc);color:#000}
             <span style="font-size:11px;color:var(--acc);font-weight:500" id="combined-result"></span>
           </div>
         </div>
-        <!-- 크림 기본 2500 안내 -->
+        <!-- 크림 기본 배송비 안내 -->
         <div style="font-size:11px;color:var(--tx2);margin-top:5px;hidden" id="kream-hint"></div>
       </div>
 
@@ -281,7 +298,7 @@ button.sell-btn:hover{background:var(--acc);color:#000}
   </div>
   <div id="dsum" class="mb12"></div>
   <div class="tw"><table>
-    <thead><tr><th>판매일</th><th>제품명</th><th>색상</th><th>사이즈</th><th>매입가</th><th>판매가</th><th>택배비</th><th>순이익</th><th>채널</th><th>메모</th><th></th></tr></thead>
+    <thead><tr><th>판매일</th><th>제품명</th><th>색상</th><th>사이즈</th><th>매입가</th><th>판매가</th><th>비용</th><th>순이익</th><th>채널</th><th>메모</th><th></th></tr></thead>
     <tbody id="sbody"></tbody>
   </table></div>
 </div>
@@ -345,7 +362,7 @@ button.sell-btn:hover{background:var(--acc);color:#000}
     <div class="fgrid">
       <div class="fgrp">
         <label class="flbl">크림 기본 택배비 (원)</label>
-        <input type="number" id="cfg-kream-fee" placeholder="2500">
+        <input type="number" id="cfg-kream-fee" placeholder="3500">
       </div>
       <div class="fgrp">
         <label class="flbl">포이즌 기본 택배비 (원)</label>
@@ -370,7 +387,7 @@ button.sell-btn:hover{background:var(--acc);color:#000}
       </select>
     </div>
     <div class="tw"><table>
-      <thead><tr><th>판매일</th><th>제품명</th><th>사이즈</th><th>매입가</th><th>판매가</th><th>택배비</th><th>채널</th><th>수정</th></tr></thead>
+      <thead><tr><th>판매일</th><th>제품명</th><th>사이즈</th><th>매입가</th><th>판매가</th><th>비용</th><th>채널</th><th>수정</th></tr></thead>
       <tbody id="ebody"></tbody>
     </table></div>
   </div>
@@ -396,7 +413,6 @@ button.sell-btn:hover{background:var(--acc);color:#000}
     <h3>재고 추가</h3>
     <div class="fgrid">
       <div class="fgrp"><label class="flbl">매입 날짜 *</label><input type="date" id="id_"></div>
-      <div class="fgrp"><label class="flbl">수량 *</label><input type="number" id="iqty_" placeholder="1" min="1" value="1"></div>
 
       <!-- 제품명 자동완성 -->
       <div class="fgrp span2" style="position:relative">
@@ -412,8 +428,13 @@ button.sell-btn:hover{background:var(--acc);color:#000}
 
       <div class="fgrp"><label class="flbl">품번 (SKU)</label><input type="text" id="isku_" placeholder="예: DX1234-001"></div>
       <div class="fgrp"><label class="flbl">색상</label><input type="text" id="ic_" placeholder="예: 검흰"></div>
-      <div class="fgrp"><label class="flbl">사이즈 *</label><input type="text" id="is_" placeholder="240"></div>
       <div class="fgrp"><label class="flbl">매입가 (원) *</label><input type="number" id="ip_" placeholder="0"></div>
+      <div class="fgrp span2">
+        <label class="flbl">사이즈별 수량 *</label>
+        <div class="size-grid size-grid-head"><span>사이즈</span><span>수량</span><span></span></div>
+        <div id="size-rows"></div>
+        <button type="button" class="link-btn" onclick="addSizeRow()">+ 사이즈 추가</button>
+      </div>
       <div class="fgrp span2"><label class="flbl">비고</label><input type="text" id="ino_" placeholder="박스없음, 환불불가 등"></div>
     </div>
     <div id="add-preview" style="display:none;background:var(--bg3);border-radius:var(--rs);padding:10px 12px;margin-top:10px;font-size:12px;color:var(--tx2)"></div>
@@ -434,6 +455,7 @@ button.sell-btn:hover{background:var(--acc);color:#000}
       <div class="fgrp"><label class="flbl">매입가 (원)</label><input type="number" id="es-pp"></div>
       <div class="fgrp"><label class="flbl">판매가 (원)</label><input type="number" id="es-sp"></div>
       <div class="fgrp"><label class="flbl">택배비 (원)</label><input type="number" id="es-fee"></div>
+      <div class="fgrp"><label class="flbl">반품/패널티 비용 (원)</label><input type="number" id="es-extra" placeholder="0"></div>
       <div class="fgrp"><label class="flbl">채널</label>
         <select id="es-ch">
           <option value="daangn">당근마켓</option>
@@ -748,7 +770,7 @@ let uid=0;
 const gid=()=>'u'+(uid++).toString(36)+Date.now().toString(36).slice(-4);
 const LS_KEY='sneaker_v20_stable';
 const LEGACY_LS_KEY='sneaker_v3';
-let S={inventory:[],sales:[],deletedSales:{},updatedAt:null,cfg:{kreamFee:2500,poisonFee:0,daangnFee:0}};
+let S={inventory:[],sales:[],returns:[],expenses:[],deletedSales:{},updatedAt:null,cfg:{kreamFee:3500,poisonFee:0,daangnFee:0}};
 let fbMode=false;
 let pchart=null,cchart=null;
 let curTab='inv';
@@ -760,7 +782,9 @@ function mkInitData(){
       const sk=r.ch==='daangn'?'daangn_'+(r.dt||'delivery'):r.ch;
       return{id:'ss'+i,inventoryId:null,productName:r.n,color:r.c,size:r.s,purchasePrice:r.p,saleDate:r.sd,salePrice:r.sp,channel:r.ch,daangnType:r.dt,shippingStep:Math.min(r.step,STEPS[sk].length-1),shippingFee:r.fee||0,notes:''};
     }),
-    cfg:{kreamFee:2500,poisonFee:0,daangnFee:0},
+    cfg:{kreamFee:3500,poisonFee:0,daangnFee:0},
+    returns:[],
+    expenses:[],
     deletedSales:{},
     updatedAt:new Date().toISOString()
   };
@@ -791,11 +815,15 @@ function normalizeState(d){
   return {
     inventory:deduplicateInventory(inv), // ★ 로드 시 중복 자동 제거
     sales:Array.isArray(d.sales)?d.sales:[],
+    returns:Array.isArray(d.returns)?d.returns:[],
+    expenses:Array.isArray(d.expenses)?d.expenses:[],
     deletedSales:(d.deletedSales&&typeof d.deletedSales==='object')?d.deletedSales:{},
-    cfg:{kreamFee:2500,poisonFee:0,daangnFee:0,...(d.cfg||{})},
+    cfg:{kreamFee:3500,poisonFee:0,daangnFee:0,...(d.cfg||{})},
     updatedAt:d.updatedAt||null
   };
 }
+function saleExtraCost(s){return +(s?.extraCost||s?.penaltyFee||0)||0;}
+function saleProfit(s){return (+(s?.salePrice||0)||0)-(+(s?.purchasePrice||0)||0)-(+(s?.shippingFee||0)||0)-saleExtraCost(s);}
 function saleKey(s){
   return s.id || [s.inventoryId,s.productName,s.color,s.size,s.saleDate,s.salePrice,s.channel,s.notes].join('|');
 }
@@ -870,6 +898,8 @@ function mergeStates(local,remote){
   return {
     inventory:deduplicateInventory(inventory),
     sales,
+    returns:[...secondary.returns,...primary.returns].filter((r,i,a)=>r&&a.findIndex(x=>x.id===r.id)===i),
+    expenses:[...secondary.expenses,...primary.expenses].filter((e,i,a)=>e&&a.findIndex(x=>x.id===e.id)===i),
     deletedSales,
     cfg:{...secondary.cfg,...primary.cfg},
     updatedAt:(localTime||remoteTime)?new Date(Math.max(localTime,remoteTime)).toISOString():new Date().toISOString()
@@ -896,7 +926,7 @@ function rememberBackup(label,data){
 async function fbSaveDirect(state){
   // ★ 저장 시 Firebase 재읽기/재병합 절대 금지
   // 저장 전에 Firebase를 읽어서 merge하면 로컬 타임스탬프 비교 오류로 데이터가 덮어써짐
-  const toSave={inventory:state.inventory,sales:state.sales,cfg:state.cfg,updatedAt:new Date().toISOString()};
+  const toSave={inventory:state.inventory,sales:state.sales,returns:state.returns||[],expenses:state.expenses||[],deletedSales:state.deletedSales||{},cfg:state.cfg,updatedAt:new Date().toISOString()};
   lsSave();
   rememberBackup('save',state);
   await window.__fbSave(toSave);
@@ -988,7 +1018,9 @@ function onFirebaseData(data){
   const next={
     inventory,
     sales,
-    deletedSales:{},
+    returns:fbData.returns,
+    expenses:fbData.expenses,
+    deletedSales:fbData.deletedSales,
     cfg:{...(fbData.cfg||{})},
     updatedAt:fbData.updatedAt
   };
@@ -1018,7 +1050,7 @@ async function manualSync(){
       setStat('동기화 실패 - 연결 확인','off');
     }
   }else{
-    const d=lsLoad();if(d){S=d;}render();setStat('로컬 동기화됨','off');
+    const d=lsLoad();if(d){S=normalizeState(d);}render();setStat('로컬 동기화됨','off');
   }
 }
 
@@ -1099,6 +1131,7 @@ function openModal(id){
   document.getElementById('modal-'+id).classList.add('show');
   if(id==='addInv'){
     document.getElementById('id_').value=new Date().toISOString().slice(0,10);
+    ensureSizeRows();
   }
 }
 function closeModal(id){document.getElementById('modal-'+id).classList.remove('show');}
@@ -1167,7 +1200,8 @@ function renderInv(){
 
   document.getElementById('icnt').textContent=`총 ${S.inventory.filter(x=>x.status==='in_stock').length}개 재고 / ${items.length}개 표시`;
   const body=document.getElementById('ibody');
-  if(!items.length){body.innerHTML=`<tr><td colspan="8" class="empty">조건에 맞는 재고가 없습니다</td></tr>`;return;}
+  renderReturns();
+  if(!items.length){body.innerHTML=`<tr><td colspan="9" class="empty">조건에 맞는 재고가 없습니다</td></tr>`;return;}
   body.innerHTML=items.map(i=>{
     const isRefund=i.notes&&i.notes.includes('환불불가');
     const isReserved=i.status==='reserved';
@@ -1180,22 +1214,44 @@ function renderInv(){
       <td class="hide-mobile" style="color:var(--tx2)">${fd(i.purchaseDate)}</td>
       <td class="hide-mobile" style="font-size:11px">${isRefund?`<span class="bdg bdg-refund">⚠️ 환불불가</span>`:''}${i.notes&&!isRefund?i.notes:''}</td>
       <td>${i.status==='in_stock'?`<button class="sell-btn" onclick="quickSell('${i.id}')">💰 판매</button>`:''}</td>
-      <td>${i.status==='in_stock'?`<button class="danger sm" onclick="delItem('${i.id}')">✕</button>`:''}</td>
+      <td>${i.status==='in_stock'?`<div class="action-cell"><button class="sm" onclick="returnItem('${i.id}')">반품</button><button class="danger sm" onclick="delItem('${i.id}')">삭제</button></div>`:''}</td>
     </tr>`;
   }).join('');
 }
 
+function renderReturns(){
+  const returns=Array.isArray(S.returns)?S.returns:[];
+  const body=document.getElementById('return-body');
+  const sum=document.getElementById('return-summary');
+  if(!body) return;
+  const total=returns.reduce((a,r)=>a+(+r.purchasePrice||0),0);
+  if(sum) sum.textContent=`${returns.length}개 · 매입가 합계 ${won(total)}`;
+  if(!returns.length){body.innerHTML=`<tr><td colspan="7" class="empty">반품 기록이 없습니다</td></tr>`;return;}
+  body.innerHTML=[...returns].sort((a,b)=>(b.returnDate||'').localeCompare(a.returnDate||'')).slice(0,80).map(r=>`<tr>
+    <td style="color:var(--tx2)">${fd(r.returnDate)}</td>
+    <td><b>${r.productName}</b></td>
+    <td>${r.color||'—'}</td>
+    <td>${r.size}</td>
+    <td>${won(r.purchasePrice)}</td>
+    <td class="hide-mobile" style="color:var(--tx3);font-size:11px">${r.sku||'—'}</td>
+    <td class="hide-mobile" style="font-size:11px;color:var(--tx2)">${r.reason||r.notes||''}</td>
+  </tr>`).join('');
+}
+
 function addItem(){
-  const d=v('id_'),n=v('in_').trim(),c=v('ic_'),s=v('is_'),p=+v('ip_');
-  const qty=Math.max(1,parseInt(v('iqty_'))||1);
+  const d=v('id_'),n=v('in_').trim(),c=v('ic_'),p=+v('ip_');
+  const sizes=getSizeEntries();
   const sku=v('isku_').trim();
-  if(!d||!n||!s||!p){alert('날짜, 제품명, 사이즈, 매입가는 필수입니다');return;}
-  for(let i=0;i<qty;i++){
-    S.inventory.unshift({id:gid(),purchaseDate:d,productName:n,color:c,size:s,purchasePrice:p,status:'in_stock',sku:sku,notes:v('ino_')});
-  }
+  if(!d||!n||!sizes.length||!p){alert('날짜, 제품명, 사이즈별 수량, 매입가는 필수입니다');return;}
+  sizes.forEach(entry=>{
+    for(let i=0;i<entry.qty;i++){
+      S.inventory.unshift({id:gid(),purchaseDate:d,productName:n,color:c,size:entry.size,purchasePrice:p,status:'in_stock',sku:sku,notes:v('ino_')});
+    }
+  });
   window.__safeSave();renderInv();fillSel();closeModal('addInv');
-  ['id_','in_','ic_','is_','ip_','ino_','isku_'].forEach(x=>{const el=document.getElementById(x);if(el)el.value='';});
-  document.getElementById('iqty_').value='1';
+  ['id_','in_','ic_','ip_','ino_','isku_'].forEach(x=>{const el=document.getElementById(x);if(el)el.value='';});
+  const rows=document.getElementById('size-rows');if(rows)rows.innerHTML='';
+  addSizeRow('','1');
   document.getElementById('ac-list').style.display='none';
   document.getElementById('add-preview').style.display='none';
 }
@@ -1258,21 +1314,82 @@ function selectProduct(name,sku,color,pp){
 }
 
 function updateAddPreview(){
-  const n=v('in_'),qty=parseInt(v('iqty_'))||1,p=+v('ip_');
+  const n=v('in_'),lines=getSizeEntries(),qty=lines.reduce((a,x)=>a+x.qty,0),p=+v('ip_');
   const prev=document.getElementById('add-preview');
-  if(n&&qty>1){
+  if(n&&qty>0){
     prev.style.display='block';
-    prev.innerHTML=`📦 <b>${n}</b> ${qty}개 등록 예정${p?' · 총 매입가 '+( p*qty).toLocaleString()+'원':''}`;
+    prev.innerHTML=`📦 <b>${n}</b> ${lines.map(x=>`${x.size} ${x.qty}개`).join(' · ')} 등록 예정${p?' · 총 매입가 '+(p*qty).toLocaleString()+'원':''}`;
   }else{
     prev.style.display='none';
   }
+}
+
+function ensureSizeRows(){
+  const box=document.getElementById('size-rows');
+  if(box&&!box.children.length) addSizeRow('','1');
+}
+function addSizeRow(size='',qty='1'){
+  const box=document.getElementById('size-rows');
+  if(!box) return;
+  const row=document.createElement('div');
+  row.className='size-grid size-row';
+  row.innerHTML=`
+    <input type="text" class="size-input" placeholder="240" value="${String(size).replace(/"/g,'&quot;')}" oninput="updateAddPreview()">
+    <input type="number" class="qty-input" min="1" value="${String(qty).replace(/"/g,'&quot;')}" oninput="updateAddPreview()">
+    <button type="button" class="danger sm" onclick="removeSizeRow(this)">✕</button>`;
+  box.appendChild(row);
+  updateAddPreview();
+}
+function removeSizeRow(btn){
+  const box=document.getElementById('size-rows');
+  btn.closest('.size-row')?.remove();
+  if(box&&!box.children.length) addSizeRow('','1');
+  updateAddPreview();
+}
+function getSizeEntries(){
+  ensureSizeRows();
+  const rows=[...document.querySelectorAll('#size-rows .size-row')];
+  return rows.map(row=>({
+    size:row.querySelector('.size-input')?.value.trim()||'',
+    qty:Math.max(1,parseInt(row.querySelector('.qty-input')?.value,10)||1)
+  })).filter(x=>x.size);
 }
 
 // 드롭다운 외부 클릭 시 닫기
 document.addEventListener('click',e=>{
   if(!e.target.closest('#modal-addInv')) document.getElementById('ac-list').style.display='none';
 });
-function delItem(id){if(!confirm('이 재고를 삭제하시겠습니까?'))return;S.inventory=S.inventory.filter(i=>i.id!==id);window.__safeSave();renderInv();fillSel();}
+function delItem(id){
+  const item=S.inventory.find(i=>i.id===id);
+  if(!item) return;
+  if(!confirm(`입력 오류로 삭제하시겠습니까?\n\n${item.productName}${item.color?' '+item.color:''} ${item.size}\n\n반품 기록에는 남지 않습니다.`))return;
+  S.inventory=S.inventory.filter(i=>i.id!==id);
+  window.__safeSave();renderInv();fillSel();
+}
+
+function returnItem(id){
+  const item=S.inventory.find(i=>i.id===id);
+  if(!item) return;
+  const reason=prompt(`반품 사유를 입력하세요.\n\n${item.productName}${item.color?' '+item.color:''} ${item.size}\n매입가: ${won(item.purchasePrice)}`,'반품');
+  if(reason===null) return;
+  if(!confirm('반품 처리하면 재고에서 제외되고 반품 목록에 기록됩니다. 진행할까요?')) return;
+  if(!Array.isArray(S.returns)) S.returns=[];
+  S.returns.unshift({
+    id:gid(),
+    inventoryId:item.id,
+    returnDate:new Date().toISOString().slice(0,10),
+    purchaseDate:item.purchaseDate,
+    productName:item.productName,
+    sku:item.sku||'',
+    color:item.color||'',
+    size:item.size,
+    purchasePrice:item.purchasePrice||0,
+    reason:reason||'반품',
+    notes:item.notes||''
+  });
+  S.inventory=S.inventory.filter(i=>i.id!==id);
+  window.__safeSave();renderInv();fillSel();
+}
 
 function quickSell(id){
   goTab('sale');
@@ -1308,19 +1425,21 @@ function calcProfit(){
 
 function onCC(){
   const ch=v('sch');
-  const cfg=S.cfg||{kreamFee:2500,poisonFee:0,daangnFee:0};
+  const cfg=S.cfg||{kreamFee:3500,poisonFee:0,daangnFee:0};
   document.getElementById('dtf').classList.toggle('hidden',ch!=='daangn');
   // 바로구매일 때만 주문번호 칸 표시
   const isInstant=ch==='daangn'&&document.getElementById('sdt').value==='instant';
   document.getElementById('daangn-order-f').classList.toggle('hidden',!isInstant);
-  document.getElementById('poison-box').classList.toggle('hidden',ch!=='poison');
+  document.getElementById('poison-box').classList.toggle('hidden',!(ch==='poison'||ch==='kream'));
   const hint=document.getElementById('kream-hint');
   if(ch==='kream'){
     document.getElementById('sfee').value=cfg.kreamFee||0;
+    document.getElementById('combined-total').value=cfg.kreamFee||3500;
     hint.textContent=`크림 기본 택배비 ${(cfg.kreamFee||0).toLocaleString()}원 자동 설정됨`;
     hint.style.display='block';
   }else if(ch==='poison'){
     document.getElementById('sfee').value=cfg.poisonFee||0;
+    document.getElementById('combined-total').value=cfg.poisonFee||0;
     hint.style.display='none';
   }else if(ch==='daangn'){
     document.getElementById('sfee').value=cfg.daangnFee||0;
@@ -1333,7 +1452,7 @@ function onCC(){
     hint.style.display='none';
     hint.textContent='';
   }
-  if(ch!=='poison'){
+  if(!(ch==='poison'||ch==='kream')){
     document.getElementById('combined-chk').checked=false;
     document.getElementById('combined-result').textContent='';
   }
@@ -1366,13 +1485,14 @@ function exportExcel(){
 
   // ── 시트2: 판매 내역 ──
   const saleRows=[
-    ['판매일','제품명','색상','사이즈','매입가','판매가','택배비','순이익','채널','거래유형','메모']
+    ['판매일','제품명','색상','사이즈','매입가','판매가','배송비','반품/패널티','순이익','채널','거래유형','메모']
   ];
   [...S.sales]
     .sort((a,b)=>b.saleDate.localeCompare(a.saleDate))
     .forEach(s=>{
       const fee=s.shippingFee||0;
-      const profit=s.salePrice-s.purchasePrice-fee;
+      const extra=saleExtraCost(s);
+      const profit=saleProfit(s);
       saleRows.push([
         s.saleDate,
         s.productName,
@@ -1381,6 +1501,7 @@ function exportExcel(){
         s.purchasePrice,
         s.salePrice,
         fee,
+        extra,
         profit,
         CH[s.channel]||s.channel,
         s.daangnType?DT[s.daangnType]||'':'',
@@ -1388,26 +1509,67 @@ function exportExcel(){
       ]);
     });
 
-  // ── 시트3: 수익 요약 ──
-  const totalProfit=S.sales.reduce((a,s)=>a+(s.salePrice-s.purchasePrice-(s.shippingFee||0)),0);
+  // ── 시트3: 반품 목록 ──
+  const returnRows=[
+    ['반품일','매입일','제품명','품번','색상','사이즈','매입가','사유','비고']
+  ];
+  [...(S.returns||[])]
+    .sort((a,b)=>(b.returnDate||'').localeCompare(a.returnDate||''))
+    .forEach(r=>returnRows.push([
+      r.returnDate||'',
+      r.purchaseDate||'',
+      r.productName||'',
+      r.sku||'',
+      r.color||'',
+      r.size||'',
+      r.purchasePrice||0,
+      r.reason||'',
+      r.notes||''
+    ]));
+
+  // ── 시트4: 판매 반품 비용 ──
+  const expenseRows=[
+    ['일자','제품명','색상','사이즈','채널','금액','메모']
+  ];
+  [...(S.expenses||[])]
+    .sort((a,b)=>(b.date||'').localeCompare(a.date||''))
+    .forEach(e=>expenseRows.push([
+      e.date||'',
+      e.productName||'',
+      e.color||'',
+      e.size||'',
+      CH[e.channel]||e.channel||'',
+      e.amount||0,
+      e.memo||''
+    ]));
+
+  // ── 시트5: 수익 요약 ──
+  const expenseTotal=(S.expenses||[]).reduce((a,e)=>a+(+e.amount||0),0);
+  const totalProfit=S.sales.reduce((a,s)=>a+saleProfit(s),0)-expenseTotal;
   const totalSales=S.sales.reduce((a,s)=>a+s.salePrice,0);
-  const totalFee=S.sales.reduce((a,s)=>a+(s.shippingFee||0),0);
+  const totalFee=S.sales.reduce((a,s)=>a+(s.shippingFee||0)+saleExtraCost(s),0)+expenseTotal;
   const invAsset=S.inventory.filter(i=>i.status==='in_stock').reduce((a,i)=>a+i.purchasePrice,0);
   const chStats={daangn:{cnt:0,profit:0},poison:{cnt:0,profit:0},kream:{cnt:0,profit:0}};
   S.sales.forEach(s=>{
     if(chStats[s.channel]){
       chStats[s.channel].cnt++;
-      chStats[s.channel].profit+=s.salePrice-s.purchasePrice-(s.shippingFee||0);
+      chStats[s.channel].profit+=saleProfit(s);
     }
+  });
+  (S.expenses||[]).forEach(e=>{
+    if(chStats[e.channel]) chStats[e.channel].profit-=+e.amount||0;
   });
   const sumRows=[
     ['항목','값'],
     ['총 판매건수',S.sales.length],
     ['총 매출액',totalSales],
-    ['총 택배비',totalFee],
+    ['총 비용',totalFee],
     ['총 순이익',totalProfit],
     ['현재 재고수',S.inventory.filter(i=>i.status==='in_stock').length],
     ['재고 자산',invAsset],
+    ['반품수',S.returns?.length||0],
+    ['반품 매입가 합계',(S.returns||[]).reduce((a,r)=>a+(+r.purchasePrice||0),0)],
+    ['판매 반품 비용',expenseTotal],
     ['',''],
     ['채널','판매건수','순이익'],
     ['당근',chStats.daangn.cnt,chStats.daangn.profit],
@@ -1435,6 +1597,10 @@ function exportExcel(){
     '=== 재고 현황 ===\r\n'+toCsv(invRows)+
     sep+
     '=== 판매 내역 ===\r\n'+toCsv(saleRows)+
+    sep+
+    '=== 반품 목록 ===\r\n'+toCsv(returnRows)+
+    sep+
+    '=== 판매 반품 비용 ===\r\n'+toCsv(expenseRows)+
     sep+
     '=== 수익 요약 ===\r\n'+toCsv(sumRows);
 
@@ -1486,7 +1652,9 @@ function backupData(){
     _version: 'v15',
     _counts: {
       inventory: S.inventory?.length||0,
-      sales: S.sales?.length||0
+      sales: S.sales?.length||0,
+      returns: S.returns?.length||0,
+      expenses: S.expenses?.length||0
     },
     ...S
   };
@@ -1498,7 +1666,7 @@ function backupData(){
 
   // 백업 이력 로컬에 기록
   const hist=JSON.parse(localStorage.getItem('sneaker_backup_hist')||'[]');
-  hist.unshift({date:now.toISOString(),filename,inv:payload._counts.inventory,sales:payload._counts.sales});
+  hist.unshift({date:now.toISOString(),filename,inv:payload._counts.inventory,sales:payload._counts.sales,returns:payload._counts.returns,expenses:payload._counts.expenses});
   localStorage.setItem('sneaker_backup_hist',JSON.stringify(hist.slice(0,10)));
 
   document.getElementById('backup-stat').textContent=`✅ ${filename} 저장됨`;
@@ -1520,11 +1688,13 @@ function restoreData(input){
       const inv=data.inventory.length, sal=data.sales.length;
       if(!confirm(`백업 파일을 복원하시겠습니까?\n재고 ${inv}개, 판매 ${sal}건\n백업일: ${raw._backupDate||'알 수 없음'}\n\n⚠️ 현재 데이터가 백업 파일로 교체됩니다.`)) return;
 
-      if(!data.cfg) data.cfg={kreamFee:2500,poisonFee:0,daangnFee:0};
+      if(!data.cfg) data.cfg={kreamFee:3500,poisonFee:0,daangnFee:0};
+      if(!data.returns) data.returns=[];
+      if(!data.expenses) data.expenses=[];
       if(!data.deletedSales) data.deletedSales={};
       data.updatedAt=new Date().toISOString();
 
-      S=data;
+      S=normalizeState(data);
       lsSave();
       render();
 
@@ -1563,12 +1733,12 @@ function renderBackupList(){
     hist.map(h=>`<div style="font-size:12px;padding:6px 0;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between">
       <span style="color:var(--tx2)">${new Date(h.date).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}</span>
       <span>${h.filename}</span>
-      <span style="color:var(--tx3)">재고 ${h.inv}개 · 판매 ${h.sales}건</span>
+      <span style="color:var(--tx3)">재고 ${h.inv}개 · 판매 ${h.sales}건 · 반품 ${h.returns||0}건 · 비용 ${h.expenses||0}건</span>
     </div>`).join('');
 }
 function renderCfg(){
-  const cfg=S.cfg||{kreamFee:2500,poisonFee:0,daangnFee:0};
-  document.getElementById('cfg-kream-fee').value=cfg.kreamFee??2500;
+  const cfg=S.cfg||{kreamFee:3500,poisonFee:0,daangnFee:0};
+  document.getElementById('cfg-kream-fee').value=cfg.kreamFee??3500;
   document.getElementById('cfg-poison-fee').value=cfg.poisonFee??0;
   document.getElementById('cfg-daangn-fee').value=cfg.daangnFee??0;
   renderBackupList();
@@ -1602,7 +1772,7 @@ function renderEditSales(){
     <td>${s.size}</td>
     <td style="color:var(--tx3)">${won(s.purchasePrice)}</td>
     <td>${won(s.salePrice)}</td>
-    <td style="color:var(--red)">${s.shippingFee?'-'+s.shippingFee.toLocaleString()+'원':'-'}</td>
+    <td style="color:var(--red)">${(s.shippingFee||saleExtraCost(s))?'-'+((s.shippingFee||0)+saleExtraCost(s)).toLocaleString()+'원':'-'}</td>
     <td>${chBdg(s.channel,s.daangnType)}</td>
     <td><button class="sm" onclick="openEditSale('${s.id}')">✏️ 수정</button></td>
   </tr>`).join('');
@@ -1618,6 +1788,7 @@ function openEditSale(id){
   document.getElementById('es-pp').value=s.purchasePrice||0;
   document.getElementById('es-sp').value=s.salePrice||0;
   document.getElementById('es-fee').value=s.shippingFee||0;
+  document.getElementById('es-extra').value=saleExtraCost(s)||0;
   document.getElementById('es-ch').value=s.channel||'daangn';
   document.getElementById('es-dt').value=s.daangnType||'';
   document.getElementById('es-note').value=s.notes||'';
@@ -1634,6 +1805,7 @@ function saveEditSale(){
   s.purchasePrice=+document.getElementById('es-pp').value||0;
   s.salePrice=+document.getElementById('es-sp').value||0;
   s.shippingFee=+document.getElementById('es-fee').value||0;
+  s.extraCost=+document.getElementById('es-extra').value||0;
   s.channel=document.getElementById('es-ch').value;
   s.daangnType=document.getElementById('es-dt').value||null;
   s.notes=document.getElementById('es-note').value;
@@ -1692,7 +1864,14 @@ function saveEditInv(){
 
 function onCombined(){
   const chk=document.getElementById('combined-chk').checked;
-  if(!chk){document.getElementById('combined-result').textContent='';document.getElementById('sfee').value='0';calcProfit();return;}
+  if(!chk){
+    const ch=v('sch');
+    const cfg=S.cfg||{kreamFee:3500,poisonFee:0,daangnFee:0};
+    document.getElementById('combined-result').textContent='';
+    document.getElementById('sfee').value=ch==='kream'?(cfg.kreamFee||0):ch==='poison'?(cfg.poisonFee||0):'0';
+    calcProfit();
+    return;
+  }
   const total=+document.getElementById('combined-total').value||0;
   const qty=+document.getElementById('combined-qty').value||1;
   const per=Math.round(total/qty);
@@ -1721,7 +1900,7 @@ function regSale(){
     id:gid(),inventoryId:iid,
     productName:inv.productName,color:inv.color,size:inv.size,
     purchasePrice:inv.purchasePrice,saleDate:d,salePrice:sp,
-    channel:ch,daangnType:dt,shippingStep:0,shippingFee:fee,notes:noteVal,
+    channel:ch,daangnType:dt,shippingStep:0,shippingFee:fee,extraCost:0,notes:noteVal,
     shippingDone:false,   // ★ 대기열에서 시작
     paymentType:null      // 당근 직거래 선불/후불
   });
@@ -1755,13 +1934,13 @@ function renderSales(){
   if(df){
     // 소계는 전체(대기 포함) 기준
     const tv=sl.reduce((a,s)=>a+s.salePrice,0);
-    const pv=sl.reduce((a,s)=>a+(s.salePrice-s.purchasePrice-(s.shippingFee||0)),0);
-    const tf=sl.reduce((a,s)=>a+(s.shippingFee||0),0);
+    const pv=sl.reduce((a,s)=>a+saleProfit(s),0);
+    const tf=sl.reduce((a,s)=>a+(s.shippingFee||0)+saleExtraCost(s),0);
     const pendingCnt=sl.filter(s=>!isShipDone(s)).length;
     document.getElementById('dsum').innerHTML=`<div class="sgrid" style="grid-template-columns:repeat(4,1fr)">
       <div class="scard"><div class="slbl">판매 수량</div><div class="sval">${sl.length}개${pendingCnt?`<span style="font-size:11px;color:var(--orange);margin-left:4px">(대기 ${pendingCnt})</span>`:''}</div></div>
       <div class="scard"><div class="slbl">총 판매액</div><div class="sval">${Math.round(tv/10000)}만원</div></div>
-      <div class="scard"><div class="slbl">총 택배비</div><div class="sval red">-${tf.toLocaleString()}</div></div>
+      <div class="scard"><div class="slbl">총 비용</div><div class="sval red">-${tf.toLocaleString()}</div></div>
       <div class="scard"><div class="slbl">총 순이익</div><div class="sval ${pv>=0?'green':'red'}">${pv>=0?'+':''}${pv.toLocaleString()}원</div></div>
     </div>`;
   }else document.getElementById('dsum').innerHTML='';
@@ -1769,7 +1948,8 @@ function renderSales(){
   if(!sl.length){body.innerHTML=`<tr><td colspan="10" class="empty">판매 내역이 없습니다</td></tr>`;return;}
   body.innerHTML=sl.map(s=>{
     const fee=s.shippingFee||0;
-    const pr=s.salePrice-s.purchasePrice-fee;
+    const extra=saleExtraCost(s);
+    const pr=saleProfit(s);
     const pending=!isShipDone(s);
     return`<tr style="${pending?'opacity:.75':''}">
       <td style="color:var(--tx2)">${fd(s.saleDate)}</td>
@@ -1777,7 +1957,7 @@ function renderSales(){
       <td>${s.color||'—'}</td><td>${s.size}</td>
       <td style="color:var(--tx3)">${won(s.purchasePrice)}</td>
       <td>${won(s.salePrice)}</td>
-      <td style="color:var(--red)">${fee?'-'+fee.toLocaleString()+'원':'-'}</td>
+      <td style="color:var(--red)">${(fee||extra)?'-'+(fee+extra).toLocaleString()+'원':'-'}</td>
       <td class="${pr>=0?'green':'red'}" style="font-weight:600">${pending?`<span style="color:var(--tx3)">${pr>=0?'+':''}${pr.toLocaleString()}원</span>`:`${pr>=0?'+':''}${pr.toLocaleString()}원`}</td>
       <td>${chBdg(s.channel,s.daangnType)}</td>
       <td style="font-size:11px;color:var(--yellow)">${s.notes||''}</td>
@@ -1800,6 +1980,7 @@ function delSale(id){
     `✅ 삭제 시 해당 상품이 재고중으로 복구됩니다.`
   );
   if(!isConfirmed)return;
+  const extraCost=parseInt(prompt('판매 반품으로 발생한 배송비/패널티가 있으면 입력하세요. 없으면 0을 입력하세요.','0')||'0',10)||0;
 
   // ★ 재고 복구 - 새 항목 추가는 절대 하지 않음 (중복 원인)
   // mergeStates가 판매 없는 'sold' 항목을 자동으로 in_stock으로 복구함
@@ -1824,6 +2005,20 @@ function delSale(id){
   // mergeStates의 자동 복구 로직이 처리함 (없으면 이미 in_stock 상태)
 
   S.sales=S.sales.filter(s=>s.id!==id);
+  if(extraCost>0){
+    if(!Array.isArray(S.expenses)) S.expenses=[];
+    S.expenses.unshift({
+      id:gid(),
+      date:new Date().toISOString().slice(0,10),
+      amount:extraCost,
+      type:'sale_return_cost',
+      channel:sale.channel,
+      productName:sale.productName,
+      color:sale.color||'',
+      size:sale.size,
+      memo:'판매 반품 배송비/패널티'
+    });
+  }
   window.__safeSave();renderInv();renderSales();renderShip();fillSel();
 }
 
@@ -2118,23 +2313,35 @@ function renderAna(){
 
   const ts=doneSales.filter(s=>s.saleDate===today);
   const ms=doneSales.filter(s=>s.saleDate.startsWith(mo));
-  const mP=ms.reduce((a,s)=>a+(s.salePrice-s.purchasePrice-(s.shippingFee||0)),0);
+  const expenses=Array.isArray(S.expenses)?S.expenses:[];
+  const periodExpenses=expenses.filter(e=>{
+    if(!anaPeriodFrom&&!anaPeriodTo) return true;
+    if(anaPeriodFrom&&e.date<anaPeriodFrom) return false;
+    if(anaPeriodTo&&e.date>anaPeriodTo) return false;
+    return true;
+  });
+  const todayExpenses=expenses.filter(e=>e.date===today);
+  const monthExpenses=expenses.filter(e=>e.date&&e.date.startsWith(mo));
+  const expenseSum=list=>list.reduce((a,e)=>a+(+e.amount||0),0);
+
+  const mP=ms.reduce((a,s)=>a+saleProfit(s),0)-expenseSum(monthExpenses);
   const mR=ms.reduce((a,s)=>a+s.salePrice,0);
-  const tP=doneSales.reduce((a,s)=>a+(s.salePrice-s.purchasePrice-(s.shippingFee||0)),0);
-  const pP=periodSales.reduce((a,s)=>a+(s.salePrice-s.purchasePrice-(s.shippingFee||0)),0);
+  const tP=doneSales.reduce((a,s)=>a+saleProfit(s),0)-expenseSum(expenses);
+  const pP=periodSales.reduce((a,s)=>a+saleProfit(s),0)-expenseSum(periodExpenses);
   const pR=periodSales.reduce((a,s)=>a+s.salePrice,0);
   const sv=S.inventory.filter(i=>i.status==='in_stock').reduce((a,i)=>a+i.purchasePrice,0);
   const scnt=S.inventory.filter(i=>i.status==='in_stock').length;
 
   const days=[],dps=[];
   for(let i=29;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);days.push(d.toISOString().slice(0,10));}
-  days.forEach(d=>dps.push(doneSales.filter(s=>s.saleDate===d).reduce((a,s)=>a+(s.salePrice-s.purchasePrice-(s.shippingFee||0)),0)));
+  days.forEach(d=>dps.push(doneSales.filter(s=>s.saleDate===d).reduce((a,s)=>a+saleProfit(s),0)-expenseSum(expenses.filter(e=>e.date===d))));
 
   const cd={daangn:0,poison:0,kream:0};
-  periodSales.forEach(s=>{cd[s.channel]=(cd[s.channel]||0)+(s.salePrice-s.purchasePrice-(s.shippingFee||0));});
+  periodSales.forEach(s=>{cd[s.channel]=(cd[s.channel]||0)+saleProfit(s);});
+  periodExpenses.forEach(e=>{if(e.channel)cd[e.channel]=(cd[e.channel]||0)-(+e.amount||0);});
 
   const pm={};
-  periodSales.forEach(s=>{const k=s.productName+(s.color?' '+s.color:'');if(!pm[k])pm[k]={name:k,cnt:0,profit:0};pm[k].cnt++;pm[k].profit+=s.salePrice-s.purchasePrice-(s.shippingFee||0);});
+  periodSales.forEach(s=>{const k=s.productName+(s.color?' '+s.color:'');if(!pm[k])pm[k]={name:k,cnt:0,profit:0};pm[k].cnt++;pm[k].profit+=saleProfit(s);});
   const top=Object.values(pm).sort((a,b)=>b.profit-a.profit).slice(0,8);
 
   // 팝업 리스트 HTML
@@ -2143,15 +2350,16 @@ function renderAna(){
     return`<div class="popup-list">
       <div class="popup-title"><span>${title} (${list.length}건)</span><span class="popup-close" onclick="togglePopup(null)">✕</span></div>
       <div style="overflow-x:auto"><table style="min-width:500px">
-        <thead><tr><th>판매일</th><th>제품명</th><th>색상</th><th>사이즈</th><th>판매가</th><th>택배비</th><th>순이익</th><th>채널</th></tr></thead>
+        <thead><tr><th>판매일</th><th>제품명</th><th>색상</th><th>사이즈</th><th>판매가</th><th>비용</th><th>순이익</th><th>채널</th></tr></thead>
         <tbody>${list.sort((a,b)=>b.saleDate.localeCompare(a.saleDate)).map(s=>{
-          const pr=s.salePrice-s.purchasePrice-(s.shippingFee||0);
+          const pr=saleProfit(s);
+          const cost=(s.shippingFee||0)+saleExtraCost(s);
           return`<tr>
             <td style="color:var(--tx2)">${fd(s.saleDate)}</td>
             <td><b>${s.productName}</b></td>
             <td>${s.color||'—'}</td><td>${s.size}</td>
             <td>${won(s.salePrice)}</td>
-            <td style="color:var(--red)">${s.shippingFee?'-'+s.shippingFee.toLocaleString()+'원':'-'}</td>
+            <td style="color:var(--red)">${cost?'-'+cost.toLocaleString()+'원':'-'}</td>
             <td class="${pr>=0?'green':'red'}" style="font-weight:600">${pr>=0?'+':''}${pr.toLocaleString()}원</td>
             <td>${chBdg(s.channel,s.daangnType)}</td>
           </tr>`;
@@ -2182,7 +2390,7 @@ function renderAna(){
       <div class="scard clickable" onclick="togglePopup('today')" title="클릭하면 리스트 보기">
         <div class="slbl">오늘 판매 📋</div>
         <div class="sval">${ts.length}개</div>
-        <div class="ssub">${ts.reduce((a,s)=>a+(s.salePrice-s.purchasePrice-(s.shippingFee||0)),0).toLocaleString()}원 이익</div>
+        <div class="ssub">${(ts.reduce((a,s)=>a+saleProfit(s),0)-expenseSum(todayExpenses)).toLocaleString()}원 이익</div>
       </div>
       <div class="scard"><div class="slbl">이번달 판매</div><div class="sval">${ms.length}개</div><div class="ssub">${mR.toLocaleString()}원 매출</div></div>
       <div class="scard"><div class="slbl">이번달 순이익</div><div class="sval ${mP>=0?'green':'red'}">${mP>=0?'+':''}${mP.toLocaleString()}원</div></div>
@@ -2190,6 +2398,8 @@ function renderAna(){
         <div class="slbl">선택 기간 ${anaPeriodFrom?'📋':''}</div>
         <div class="sval">${periodSales.length}건</div>
         <div class="ssub ${pP>=0?'green':'red'}">${pP>=0?'+':''}${pP.toLocaleString()}원 이익</div>
+        <div class="ssub">${pR.toLocaleString()}원 매출</div>
+        ${periodExpenses.length?`<div class="ssub" style="color:var(--red)">비용 -${expenseSum(periodExpenses).toLocaleString()}원</div>`:''}
       </div>
       <div class="scard"><div class="slbl">누적 순이익</div><div class="sval green">+${tP.toLocaleString()}원</div>
         ${(()=>{const pc=S.sales.filter(s=>!isShipDone(s)).length;return pc?`<div class="ssub" style="color:var(--orange)">대기 ${pc}건 포함</div>`:''})()}
