@@ -101,6 +101,9 @@ tbody tr:hover td{background:rgba(255,255,255,.02)}
 .link-btn{border:none;background:none;color:var(--acc);padding:4px 0;font-size:12px}
 .link-btn:hover{background:transparent;color:var(--tx)}
 .action-cell{display:flex;gap:6px;flex-wrap:wrap}
+.listing-checks{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.listing-checks label{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--tx2);white-space:nowrap}
+.listing-checks input{width:auto}
 .ship-card{background:var(--bg2);border:1px solid var(--bd);border-radius:var(--r);padding:14px 16px;margin-bottom:10px}
 .ship-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;gap:10px}
 .ship-name{font-size:13px;font-weight:500}.ship-meta{font-size:11px;color:var(--tx2);margin-top:3px}
@@ -210,6 +213,9 @@ button.sell-btn:hover{background:var(--acc);color:#000}
       <th>색상</th>
       <th>사이즈</th>
       <th>매입가</th>
+      <th>판매가</th>
+      <th>순이익</th>
+      <th>등록채널</th>
       <th class="hide-mobile">품번</th>
       <th class="hide-mobile">매입일</th>
       <th class="hide-mobile">비고</th>
@@ -813,7 +819,7 @@ function normalizeState(d){
   d=d||{};
   const inv=Array.isArray(d.inventory)?d.inventory:[];
   return {
-    inventory:deduplicateInventory(inv), // ★ 로드 시 중복 자동 제거
+    inventory:deduplicateInventory(inv).map(i=>({...i,listings:{daangn:false,kream:false,poison:false,...(i.listings||{})}})), // ★ 로드 시 중복 자동 제거
     sales:Array.isArray(d.sales)?d.sales:[],
     returns:Array.isArray(d.returns)?d.returns:[],
     expenses:Array.isArray(d.expenses)?d.expenses:[],
@@ -824,6 +830,35 @@ function normalizeState(d){
 }
 function saleExtraCost(s){return +(s?.extraCost||s?.penaltyFee||0)||0;}
 function saleProfit(s){return (+(s?.salePrice||0)||0)-(+(s?.purchasePrice||0)||0)-(+(s?.shippingFee||0)||0)-saleExtraCost(s);}
+function getListing(i){return {daangn:false,kream:false,poison:false,...(i?.listings||{})};}
+function listingChecksHtml(i){
+  const l=getListing(i);
+  return `<div class="listing-checks">
+    <label><input type="checkbox" ${l.daangn?'checked':''} onchange="toggleListing('${i.id}','daangn',this.checked)">당근</label>
+    <label><input type="checkbox" ${l.kream?'checked':''} onchange="toggleListing('${i.id}','kream',this.checked)">크림</label>
+    <label><input type="checkbox" ${l.poison?'checked':''} onchange="toggleListing('${i.id}','poison',this.checked)">포이즌</label>
+  </div>`;
+}
+function toggleListing(id,ch,checked){
+  const i=S.inventory.find(x=>x.id===id);
+  if(!i) return;
+  i.listings=getListing(i);
+  i.listings[ch]=checked;
+  window.__safeSave();
+}
+function findInventorySale(i){
+  return S.sales.find(s=>s.inventoryId===i.id) ||
+    [...S.sales].sort((a,b)=>(b.saleDate||'').localeCompare(a.saleDate||'')).find(s=>
+      s.productName===i.productName &&
+      (s.color||'')===(i.color||'') &&
+      s.size===i.size
+    );
+}
+function saleSku(s){
+  if(s?.sku) return s.sku;
+  const inv=S.inventory.find(i=>i.id===s?.inventoryId);
+  return inv?.sku||'';
+}
 function saleKey(s){
   return s.id || [s.inventoryId,s.productName,s.color,s.size,s.saleDate,s.salePrice,s.channel,s.notes].join('|');
 }
@@ -1201,15 +1236,20 @@ function renderInv(){
   document.getElementById('icnt').textContent=`총 ${S.inventory.filter(x=>x.status==='in_stock').length}개 재고 / ${items.length}개 표시`;
   const body=document.getElementById('ibody');
   renderReturns();
-  if(!items.length){body.innerHTML=`<tr><td colspan="9" class="empty">조건에 맞는 재고가 없습니다</td></tr>`;return;}
+  if(!items.length){body.innerHTML=`<tr><td colspan="12" class="empty">조건에 맞는 재고가 없습니다</td></tr>`;return;}
   body.innerHTML=items.map(i=>{
     const isRefund=i.notes&&i.notes.includes('환불불가');
     const isReserved=i.status==='reserved';
+    const sale=i.status==='sold'?findInventorySale(i):null;
+    const profit=sale?saleProfit(sale):null;
     return`<tr style="${isReserved?'opacity:.7':''}">
       <td><b>${i.productName}</b>${isReserved?'<span class="bdg" style="background:rgba(251,191,36,.15);color:var(--yellow);margin-left:6px">예약중</span>':''}</td>
       <td>${i.color||'—'}</td>
       <td>${i.size}</td>
       <td>${won(i.purchasePrice)}</td>
+      <td>${sale?won(sale.salePrice):'—'}</td>
+      <td class="${profit==null?'':profit>=0?'green':'red'}" style="font-weight:${profit==null?'400':'600'}">${profit==null?'—':`${profit>=0?'+':''}${profit.toLocaleString()}원`}</td>
+      <td>${listingChecksHtml(i)}</td>
       <td class="hide-mobile" style="color:var(--tx3);font-size:11px">${i.sku||'—'}</td>
       <td class="hide-mobile" style="color:var(--tx2)">${fd(i.purchaseDate)}</td>
       <td class="hide-mobile" style="font-size:11px">${isRefund?`<span class="bdg bdg-refund">⚠️ 환불불가</span>`:''}${i.notes&&!isRefund?i.notes:''}</td>
@@ -1245,7 +1285,7 @@ function addItem(){
   if(!d||!n||!sizes.length||!p){alert('날짜, 제품명, 사이즈별 수량, 매입가는 필수입니다');return;}
   sizes.forEach(entry=>{
     for(let i=0;i<entry.qty;i++){
-      S.inventory.unshift({id:gid(),purchaseDate:d,productName:n,color:c,size:entry.size,purchasePrice:p,status:'in_stock',sku:sku,notes:v('ino_')});
+      S.inventory.unshift({id:gid(),purchaseDate:d,productName:n,color:c,size:entry.size,purchasePrice:p,status:'in_stock',sku:sku,listings:{daangn:false,kream:false,poison:false},notes:v('ino_')});
     }
   });
   window.__safeSave();renderInv();fillSel();closeModal('addInv');
@@ -1906,7 +1946,7 @@ function regSale(){
   const isDirect=ch==='daangn'&&dt==='direct';
   S.sales.unshift({
     id:gid(),inventoryId:iid,
-    productName:inv.productName,color:inv.color,size:inv.size,
+    productName:inv.productName,sku:inv.sku||'',color:inv.color,size:inv.size,
     purchasePrice:inv.purchasePrice,saleDate:d,salePrice:sp,
     channel:ch,daangnType:dt,shippingStep:0,shippingFee:fee,extraCost:0,notes:noteVal,
     shippingDone:false,   // ★ 대기열에서 시작
@@ -2179,6 +2219,7 @@ function renderShip(){
     }
 
     const fee=s.shippingFee||0;
+    const sku=saleSku(s);
     const payTag=s.paymentType==='prepay'?'<span class="bdg" style="background:rgba(96,165,250,.15);color:var(--blue);margin-left:4px">선불</span>':
                  s.paymentType==='postpay'?'<span class="bdg" style="background:rgba(251,191,36,.15);color:var(--yellow);margin-left:4px">후불</span>':'';
 
@@ -2190,7 +2231,7 @@ function renderShip(){
             <span class="bdg ${done?'bdg-done':'bdg-pending'}">${done?'✓ 완료':'진행중'}</span>
             ${payTag}
           </div>
-          <div class="ship-name">${s.productName}${s.color?` <span style="font-weight:400;color:var(--tx2)">${s.color}</span>`:''} <span style="font-size:12px;color:var(--tx2)">${s.size}mm</span></div>
+          <div class="ship-name">${s.productName}${sku?` <span style="font-size:11px;color:var(--tx3);font-weight:400">(${sku})</span>`:''}${s.color?` <span style="font-weight:400;color:var(--tx2)">${s.color}</span>`:''} <span style="font-size:12px;color:var(--tx2)">${s.size}mm</span></div>
           <div class="ship-meta">${fd(s.saleDate)} · ${won(s.salePrice)}${fee?` · 택배비 ${fee.toLocaleString()}원`:''}</div>
           ${s.notes?`<div style="margin-top:4px;font-size:12px;color:var(--yellow)">📦 ${s.notes}</div>`:''}
         </div>
@@ -2204,7 +2245,8 @@ function renderShip(){
     if(prog2.length){
       var progHtml=prog2.map(function(ss){
         var sk3=getSK(ss),steps3=STEPS[sk3]||[],cur3=Math.min(ss.shippingStep||0,steps3.length-1);
-        var nm=ss.productName+(ss.color?' '+ss.color:'')+'  '+ss.size+'mm';
+        var sku3=saleSku(ss);
+        var nm=ss.productName+(sku3?' ('+sku3+')':'')+(ss.color?' '+ss.color:'')+'  '+ss.size+'mm';
         return '<div class="ship-card" style="opacity:.65"><div class="ship-meta">'+nm+'</div><div style="font-size:11px;color:var(--tx2);margin-top:4px">'+CH_LABEL[sk3]+'  현재: '+(steps3[cur3]||'')+'</div></div>';
       }).join('');
       cont.innerHTML+='<div style="font-size:12px;font-weight:600;color:var(--tx2);padding:20px 2px 10px;border-bottom:1px solid var(--bd);margin-bottom:12px">📦 발송 완료 / 진행중 ('+prog2.length+'건)</div>'+progHtml;
