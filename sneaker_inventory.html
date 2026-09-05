@@ -2231,7 +2231,7 @@ function renderShip(){
             <span class="bdg ${done?'bdg-done':'bdg-pending'}">${done?'✓ 완료':'진행중'}</span>
             ${payTag}
           </div>
-          <div class="ship-name">${s.productName}${sku?` <span style="font-size:11px;color:var(--tx3);font-weight:400">(${sku})</span>`:''}${s.color?` <span style="font-weight:400;color:var(--tx2)">${s.color}</span>`:''} <span style="font-size:12px;color:var(--tx2)">${s.size}mm</span></div>
+          <div class="ship-name">${s.productName}${sku?` <span style="font-size:13px;color:var(--tx);font-weight:600">(${sku})</span>`:''}${s.color?` <span style="font-weight:400;color:var(--tx2)">${s.color}</span>`:''} <span style="font-size:12px;color:var(--tx2)">${s.size}mm</span></div>
           <div class="ship-meta">${fd(s.saleDate)} · ${won(s.salePrice)}${fee?` · 택배비 ${fee.toLocaleString()}원`:''}</div>
           ${s.notes?`<div style="margin-top:4px;font-size:12px;color:var(--yellow)">📦 ${s.notes}</div>`:''}
         </div>
