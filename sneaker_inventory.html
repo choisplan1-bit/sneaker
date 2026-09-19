@@ -113,7 +113,7 @@ tbody tr:hover td{background:rgba(255,255,255,.02)}
 .ship-box-row[open] summary:after{transform:rotate(180deg)}
 .ship-box-detail{padding:0 2px 12px}
 .ship-box-products{background:var(--bg3);border:1px solid var(--bd2);border-radius:var(--rs);margin-bottom:10px;overflow:hidden}
-.ship-box-product{display:grid;grid-template-columns:38px minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px 10px;border-top:1px solid var(--bd)}
+.ship-box-product{display:grid;grid-template-columns:38px minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:8px 10px;border-top:1px solid var(--bd)}
 .ship-box-product:first-child{border-top:none}
 .ship-box-product-name{font-size:12px;color:var(--tx);overflow-wrap:anywhere}
 .ship-box-product-meta{font-size:11px;color:var(--tx2);margin-top:2px}
@@ -940,6 +940,18 @@ function clearKreamBox(box){
     delete s.kreamBoxFee;
     s.shippingFee=+(S.cfg?.kreamFee||3500)||0;
   });
+  window.__safeSave();renderShip();renderSales();renderAna();
+}
+function removeFromKreamBox(id){
+  const s=S.sales.find(x=>x.id===id);
+  const box=shipBoxKey(s);
+  if(!s||s.channel!=='kream'||!box) return;
+  if(!confirm(`${s.productName} ${s.size}mm를 박스 ${box}에서 뺄까요?`)) return;
+  delete s.kreamBox;
+  delete s.kreamBoxFee;
+  s.shippingFee=+(S.cfg?.kreamFee||3500)||0;
+  kreamBoxSelection.delete(id);
+  refreshKreamBoxFee(box);
   window.__safeSave();renderShip();renderSales();renderAna();
 }
 function advanceKreamBox(box){
@@ -2346,6 +2358,7 @@ function renderShip(){
                   <div class="ship-box-product-meta">${sku?sku+' · ':''}${r.s.color?r.s.color+' · ':''}${r.s.size}mm</div>
                 </div>
                 <span class="ship-box-meta">${won(r.s.salePrice)}</span>
+                ${!isShipDone(r.s)?`<button class="danger sm" onclick="removeFromKreamBox('${r.s.id}')">빼기</button>`:'<span></span>'}
               </div>`;
             }).join('')}
           </div>
