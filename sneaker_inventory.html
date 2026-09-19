@@ -104,6 +104,13 @@ tbody tr:hover td{background:rgba(255,255,255,.02)}
 .listing-checks{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .listing-checks label{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--tx2);white-space:nowrap}
 .listing-checks input{width:auto}
+.ship-box-panel{background:var(--bg2);border:1px solid var(--bd);border-radius:var(--r);padding:12px 14px;margin-bottom:12px}
+.ship-box-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--bd)}
+.ship-box-row:first-of-type{border-top:none}
+.ship-box-title{font-size:12px;font-weight:700;color:var(--tx)}
+.ship-box-meta{font-size:11px;color:var(--tx2)}
+.ship-box-input{width:66px!important;min-width:66px!important;flex:none!important;padding:5px 7px}
+.ship-no{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:22px;border-radius:99px;background:var(--bg3);border:1px solid var(--bd2);font-size:11px;font-weight:700;color:var(--acc);margin-right:6px}
 .ship-card{background:var(--bg2);border:1px solid var(--bd);border-radius:var(--r);padding:14px 16px;margin-bottom:10px}
 .ship-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;gap:10px}
 .ship-name{font-size:13px;font-weight:500}.ship-meta{font-size:11px;color:var(--tx2);margin-top:3px}
@@ -858,6 +865,111 @@ function saleSku(s){
   if(s?.sku) return s.sku;
   const inv=S.inventory.find(i=>i.id===s?.inventoryId);
   return inv?.sku||'';
+}
+function shipBoxKey(s){return (s?.kreamBox||'').toString().trim().replace(/[<>"'`\\]/g,'');}
+function kreamBoxItems(box){
+  const key=(box||'').toString().trim();
+  if(!key) return [];
+  return S.sales.filter(s=>s.channel==='kream'&&!isShipDone(s)&&shipBoxKey(s)===key);
+}
+function kreamBoxTotalFee(items){
+  const feeItem=items.find(s=>+(s.kreamBoxFee||0)>0);
+  if(feeItem) return +feeItem.kreamBoxFee||0;
+  const sum=items.reduce((a,s)=>a+(+s.shippingFee||0),0);
+  return sum || +(S.cfg?.kreamFee||3500) || 0;
+}
+function distributeKreamBoxFee(items,total){
+  const qty=items.length;
+  if(!qty) return;
+  const amt=Math.max(0,Math.round(+total||0));
+  const base=Math.floor(amt/qty);
+  const rem=amt-(base*qty);
+  items.forEach((s,i)=>{
+    s.kreamBoxFee=amt;
+    s.shippingFee=base+(i<rem?1:0);
+  });
+}
+function refreshKreamBoxFee(box,totalOverride){
+  const items=kreamBoxItems(box);
+  if(!items.length) return;
+  const total=totalOverride==null?kreamBoxTotalFee(items):totalOverride;
+  distributeKreamBoxFee(items,total);
+}
+function setKreamBox(id,val){
+  const s=S.sales.find(x=>x.id===id);
+  if(!s||s.channel!=='kream') return;
+  const oldBox=shipBoxKey(s);
+  const next=(val||'').toString().trim().replace(/[<>"'`\\]/g,'');
+  if(!next){
+    delete s.kreamBox;
+    delete s.kreamBoxFee;
+    s.shippingFee=+(S.cfg?.kreamFee||3500)||0;
+  }else{
+    s.kreamBox=next;
+  }
+  if(oldBox&&oldBox!==next) refreshKreamBoxFee(oldBox);
+  if(next) refreshKreamBoxFee(next);
+  window.__safeSave();renderShip();renderSales();renderAna();
+}
+function applyKreamBoxFee(box,total){
+  const key=(box||'').toString().trim();
+  if(!key) return;
+  refreshKreamBoxFee(key,+total||0);
+  window.__safeSave();renderShip();renderSales();renderAna();
+}
+function clearKreamBox(box){
+  const key=(box||'').toString().trim();
+  if(!key) return;
+  if(!confirm(`크림 박스 ${key} 묶음을 해제할까요?`)) return;
+  kreamBoxItems(key).forEach(s=>{
+    delete s.kreamBox;
+    delete s.kreamBoxFee;
+    s.shippingFee=+(S.cfg?.kreamFee||3500)||0;
+  });
+  window.__safeSave();renderShip();renderSales();renderAna();
+}
+function advanceKreamBox(box){
+  const items=kreamBoxItems(box);
+  if(!items.length) return;
+  const steps=STEPS.kream||[];
+  const last=steps.length-1;
+  const minStep=Math.min(...items.map(s=>Math.min(s.shippingStep||0,last)));
+  const target=Math.min(minStep+1,last);
+  items.forEach(s=>{
+    if((s.shippingStep||0)<=target) s.shippingStep=target;
+    s.dualA=false; s.dualB=false;
+  });
+  window.__safeSave();renderShip();renderSales();
+}
+function completeKreamBox(box){
+  const items=kreamBoxItems(box);
+  if(!items.length) return;
+  if(!confirm(`크림 박스 ${box}의 ${items.length}건을 모두 거래 완료 처리할까요?`)) return;
+  const last=(STEPS.kream||[]).length-1;
+  items.forEach(s=>{
+    s.shippingStep=last;
+    s.shippingDone=true;
+    const inv=S.inventory.find(i=>i.id===s.inventoryId);
+    if(inv) inv.status='sold';
+  });
+  window.__safeSave();renderInv();renderShip();renderSales();renderAna();
+}
+function nextKreamBoxNo(){
+  const nums=S.sales.map(s=>parseInt(shipBoxKey(s),10)).filter(n=>Number.isFinite(n));
+  return nums.length?Math.max(...nums)+1:1;
+}
+function autoKreamBoxes(){
+  const items=S.sales.filter(s=>s.channel==='kream'&&!isShipDone(s)&&!shipBoxKey(s))
+    .sort((a,b)=>(b.saleDate||'').localeCompare(a.saleDate||''));
+  if(!items.length){alert('박스가 없는 크림 발송건이 없습니다.');return;}
+  if(!confirm(`박스가 없는 크림 발송건 ${items.length}건을 30개씩 자동 묶을까요?`)) return;
+  let box=nextKreamBoxNo();
+  items.forEach((s,i)=>{
+    if(i>0&&i%30===0) box++;
+    s.kreamBox=String(box);
+  });
+  [...new Set(items.map(s=>shipBoxKey(s)))].forEach(b=>refreshKreamBoxFee(b,+(S.cfg?.kreamFee||3500)||0));
+  window.__safeSave();renderShip();renderSales();renderAna();
 }
 function saleKey(s){
   return s.id || [s.inventoryId,s.productName,s.color,s.size,s.saleDate,s.salePrice,s.channel,s.notes].join('|');
@@ -2125,7 +2237,52 @@ function renderShip(){
     if(todo2.length) allCards.push('<div style="font-size:12px;font-weight:600;color:var(--acc);padding:6px 2px 10px;border-bottom:1px solid var(--bd);margin-bottom:12px">📋 오늘 거래/발송 예정 ('+todo2.length+'건)</div>');
     sl=todo2; // render todo first
   }
-  cont.innerHTML=sl.map(s=>{
+  const visibleRows=sl.map((s,i)=>({s,seq:i+1}));
+  const kreamBoxes=[...visibleRows.reduce((m,row)=>{
+    const box=shipBoxKey(row.s);
+    if(row.s.channel==='kream'&&box){
+      if(!m.has(box)) m.set(box,{box,rows:[]});
+      m.get(box).rows.push(row);
+    }
+    return m;
+  },new Map()).values()].sort((a,b)=>{
+    const na=parseInt(a.box,10), nb=parseInt(b.box,10);
+    if(Number.isFinite(na)&&Number.isFinite(nb)) return na-nb;
+    return a.box.localeCompare(b.box,'ko');
+  });
+  const unboxedKream=visibleRows.filter(row=>row.s.channel==='kream'&&!shipBoxKey(row.s)).length;
+  const boxPanel=(kreamBoxes.length||unboxedKream)?`<div class="ship-box-panel">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+      <div>
+        <div class="ship-box-title">크림 박스 묶음</div>
+        <div class="ship-box-meta">같은 박스번호끼리 수량, 배송비, 발송단계가 함께 관리됩니다.</div>
+      </div>
+      ${unboxedKream?`<button class="sm" onclick="autoKreamBoxes()">30개씩 자동 묶기 (${unboxedKream}건)</button>`:''}
+    </div>
+    ${kreamBoxes.map(g=>{
+      const items=g.rows.map(r=>r.s);
+      const total=kreamBoxTotalFee(items);
+      const per=items.length?Math.round(total/items.length):0;
+      const seqs=g.rows.map(r=>r.seq);
+      const steps=STEPS.kream||[];
+      const curSteps=items.map(s=>Math.min(s.shippingStep||0,steps.length-1));
+      const mixed=[...new Set(curSteps)].length>1;
+      const curLabel=mixed?'단계 섞임':(steps[curSteps[0]]||'');
+      return `<div class="ship-box-row">
+        <div style="min-width:130px">
+          <div class="ship-box-title">박스 ${g.box} <span class="acc">${items.length}/30개</span></div>
+          <div class="ship-box-meta">목록 #${Math.min(...seqs)}~#${Math.max(...seqs)} · ${curLabel}</div>
+        </div>
+        <span class="ship-box-meta">박스 배송비</span>
+        <input class="ship-box-input" type="number" value="${total}" onchange="applyKreamBoxFee('${g.box}',this.value)">
+        <span class="ship-box-meta">개당 약 ${per.toLocaleString()}원</span>
+        <button class="sm" onclick="advanceKreamBox('${g.box}')">박스 다음단계</button>
+        <button class="sm" onclick="completeKreamBox('${g.box}')">박스 완료</button>
+        <button class="danger sm" onclick="clearKreamBox('${g.box}')">묶음해제</button>
+      </div>`;
+    }).join('')}
+  </div>`:'';
+  cont.innerHTML=boxPanel+visibleRows.map(({s,seq})=>{
     const sk=getSK(s);
     const steps=STEPS[sk]||[];
     const cur=Math.min(s.shippingStep||0, steps.length-1);
@@ -2220,6 +2377,12 @@ function renderShip(){
 
     const fee=s.shippingFee||0;
     const sku=saleSku(s);
+    const box=shipBoxKey(s);
+    const boxH=s.channel==='kream'?`<div style="margin-top:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+      <span class="ship-box-meta">크림 박스</span>
+      <input class="ship-box-input" type="text" value="${box}" placeholder="번호" onchange="setKreamBox('${s.id}',this.value)">
+      ${box?`<span class="bdg bdg-kream">박스 ${box}</span>`:''}
+    </div>`:'';
     const payTag=s.paymentType==='prepay'?'<span class="bdg" style="background:rgba(96,165,250,.15);color:var(--blue);margin-left:4px">선불</span>':
                  s.paymentType==='postpay'?'<span class="bdg" style="background:rgba(251,191,36,.15);color:var(--yellow);margin-left:4px">후불</span>':'';
 
@@ -2231,9 +2394,10 @@ function renderShip(){
             <span class="bdg ${done?'bdg-done':'bdg-pending'}">${done?'✓ 완료':'진행중'}</span>
             ${payTag}
           </div>
-          <div class="ship-name">${s.productName}${sku?` <span style="font-size:13px;color:var(--tx);font-weight:600">(${sku})</span>`:''}${s.color?` <span style="font-weight:400;color:var(--tx2)">${s.color}</span>`:''} <span style="font-size:12px;color:var(--tx2)">${s.size}mm</span></div>
+          <div class="ship-name"><span class="ship-no">#${seq}</span>${s.productName}${sku?` <span style="font-size:13px;color:var(--tx);font-weight:600">(${sku})</span>`:''}${s.color?` <span style="font-weight:400;color:var(--tx2)">${s.color}</span>`:''} <span style="font-size:12px;color:var(--tx2)">${s.size}mm</span></div>
           <div class="ship-meta">${fd(s.saleDate)} · ${won(s.salePrice)}${fee?` · 택배비 ${fee.toLocaleString()}원`:''}</div>
           ${s.notes?`<div style="margin-top:4px;font-size:12px;color:var(--yellow)">📦 ${s.notes}</div>`:''}
+          ${boxH}
         </div>
       </div>
       <div class="steps" style="margin-top:10px">${stepsH}</div>
