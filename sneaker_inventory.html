@@ -993,6 +993,40 @@ function updateKreamBoxSelectionUi(){
   valid.forEach(id=>kreamBoxSelection.add(id));
   document.querySelectorAll('[data-kream-selected-count]').forEach(el=>el.textContent=String(valid.length));
   document.querySelectorAll('[data-kream-box-create]').forEach(el=>el.disabled=!valid.length);
+  document.querySelectorAll('.kream-box-select').forEach(el=>el.checked=kreamBoxSelection.has(el.value));
+  document.querySelectorAll('[data-kream-select-box]').forEach(el=>{
+    const items=kreamBoxItems(el.dataset.kreamSelectBox);
+    const count=items.filter(s=>kreamBoxSelection.has(s.id)).length;
+    el.checked=items.length>0&&count===items.length;
+    el.indeterminate=count>0&&count<items.length;
+  });
+  document.querySelectorAll('[data-kream-select-all]').forEach(el=>{
+    const checks=[...document.querySelectorAll('.kream-box-select')];
+    el.checked=checks.length>0&&checks.every(c=>c.checked);
+    el.indeterminate=checks.some(c=>c.checked)&&!el.checked;
+  });
+}
+function toggleKreamBoxContents(box,checked){
+  kreamBoxItems(box).forEach(s=>{
+    if(checked) kreamBoxSelection.add(s.id); else kreamBoxSelection.delete(s.id);
+  });
+  updateKreamBoxSelectionUi();
+}
+function addSelectionToKreamBox(box){
+  const existing=kreamBoxItems(box);
+  if(!existing.length){alert('추가할 박스가 없거나 이미 완료되었습니다.');return;}
+  const items=S.sales.filter(s=>kreamBoxSelection.has(s.id)&&s.channel==='kream'&&!isShipDone(s)&&shipBoxKey(s)!==box);
+  if(!items.length){alert('이 박스에 추가할 제품을 체크해 주세요.');return;}
+  const boxCount=S.sales.filter(s=>s.channel==='kream'&&shipBoxKey(s)===box).length;
+  if(boxCount+items.length>30){alert('기존 제품을 포함해 한 박스에는 최대 30개까지 담을 수 있습니다.');return;}
+  if(!confirm(`선택한 ${items.length}개를 박스 ${box}에 추가할까요?`)) return;
+  const total=kreamBoxTotalFee(existing);
+  const oldBoxes=[...new Set(items.map(shipBoxKey).filter(Boolean))];
+  items.forEach(s=>{s.kreamBox=box;delete s.kreamBoxFee;});
+  oldBoxes.forEach(b=>refreshKreamBoxFee(b));
+  refreshKreamBoxFee(box,total);
+  kreamBoxSelection.clear();
+  window.__safeSave();renderShip();renderSales();renderAna();
 }
 function toggleKreamBoxSelection(id,checked){
   if(checked) kreamBoxSelection.add(id); else kreamBoxSelection.delete(id);
@@ -2320,12 +2354,12 @@ function renderShip(){
     <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:6px">
       <div>
         <div class="ship-box-title">크림 박스 묶음</div>
-        <div class="ship-box-meta">발송건을 체크한 뒤 새 박스로 묶으세요. 한 박스에는 최대 30개까지 들어갑니다.</div>
+        <div class="ship-box-meta">박스당 최대 30개</div>
       </div>
       ${unboxedKream?`<button class="sm" onclick="autoKreamBoxes()">30개씩 자동 묶기 (${unboxedKream}건)</button>`:''}
     </div>
     ${selectableKream.length?`<div class="ship-box-selectbar">
-      <label class="ship-box-check"><input type="checkbox" onchange="toggleVisibleKreamSelection(this.checked)">현재 목록 전체선택</label>
+      <label class="ship-box-check"><input type="checkbox" data-kream-select-all onchange="toggleVisibleKreamSelection(this.checked)">현재 목록 전체선택</label>
       <span class="ship-box-meta">선택 <strong class="acc" data-kream-selected-count>${kreamBoxSelection.size}</strong>개</span>
       <button class="pr sm" data-kream-box-create ${kreamBoxSelection.size?'':'disabled'} onclick="createKreamBoxFromSelection()">선택 항목 새 박스로 묶기</button>
     </div>`:''}
@@ -2341,6 +2375,7 @@ function renderShip(){
       const active=items.some(s=>!isShipDone(s));
       return `<details class="ship-box-row">
         <summary>
+          ${active?`<label class="ship-box-check" onclick="event.stopPropagation()"><input type="checkbox" data-kream-select-box="${g.box}" aria-label="박스 ${g.box} 제품 전체선택" onchange="toggleKreamBoxContents('${g.box}',this.checked)">전체선택</label>`:''}
           <div style="min-width:130px;flex:1">
             <div class="ship-box-title">박스 ${g.box} <span class="acc">${items.length}/30개</span></div>
             <div class="ship-box-meta">목록 #${Math.min(...seqs)}~#${Math.max(...seqs)} · ${curLabel} · 배송비 ${total.toLocaleString()}원</div>
@@ -2348,11 +2383,12 @@ function renderShip(){
           <span class="ship-box-meta">제품 목록 보기</span>
         </summary>
         <div class="ship-box-detail">
+          ${active?`<button class="pr sm" style="margin-bottom:10px" data-kream-box-create onclick="addSelectionToKreamBox('${g.box}')">선택 제품을 박스 ${g.box}에 추가</button>`:''}
           <div class="ship-box-products">
             ${g.rows.map(r=>{
               const sku=saleSku(r.s);
               return `<div class="ship-box-product">
-                <span class="ship-no">#${r.seq}</span>
+                <div>${!isShipDone(r.s)?`<label class="ship-box-check"><input class="kream-box-select" type="checkbox" value="${r.s.id}" aria-label="${r.seq}번 제품 선택" onchange="toggleKreamBoxSelection('${r.s.id}',this.checked)"></label>`:''}<span class="ship-no">#${r.seq}</span></div>
                 <div>
                   <div class="ship-box-product-name">${r.s.productName}</div>
                   <div class="ship-box-product-meta">${sku?sku+' · ':''}${r.s.color?r.s.color+' · ':''}${r.s.size}mm</div>
@@ -2507,6 +2543,7 @@ function renderShip(){
       cont.innerHTML+='<div style="font-size:12px;font-weight:600;color:var(--tx2);padding:20px 2px 10px;border-bottom:1px solid var(--bd);margin-bottom:12px">📦 발송 완료 / 진행중 ('+prog2.length+'건)</div>'+progHtml;
     }
   }
+  updateKreamBoxSelectionUi();
 }
 
 
